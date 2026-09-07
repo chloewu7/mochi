@@ -14,7 +14,17 @@
   (function feedRootRescue() {
     // v3.25.x：feed-last/feed-next/feed-day-count 不在此列——它们是【按联系人桌面】
     // 独立存取的 TA 发帖调度状态（见 deskSchedRescue 与 maybeAutoPostFor），不是全局共享键
-    const KEYS = ['feed-notices', 'feed-app-unread', 'feed-cover-bg', 'feed-ta-cover', 'feed-ta-name', 'feed-ta-avatar', 'feed-user-name', 'feed-user-avatar'];
+    // #232：身份/封面六键（cover-bg/ta-cover/ta-name/ta-avatar/user-name/user-avatar）同样
+    // 不在此列了——v3.8.x 朋友圈好友列表起它们已改【按联系人桌面】独立存取（所有读取方
+    // per-cid 优先、根键只是旧版全局回退），default 命名空间里的值是现行数据而非滞留残留。
+    // 旧逻辑「根键有值就删 default 副本」把用户编辑后的朋友圈头像/昵称/封面在每次启动时
+    // 删回旧全局值（红米 Note12 Turbo Chrome 报「保存后刷新恢复初始」，多机型同发），且
+    // 首次刷新还会把 per-cid 值搬上根键，从此每次编辑都活不过下一次刷新。六键改走下方
+    // DESK_KEYS 收养式回收：per-cid 有值一律不动；per-cid 为空且根键还有旧全局值时才收养
+    // 进 default（收养前向 IDB 三态确认 per-cid 真的没有值——>200KB 大值只存 IDB，
+    // def.get 看不到 ≠ 不存在，贸然收养会用旧全局值盖掉它），根键保留作回退，幂等。
+    const KEYS = ['feed-notices', 'feed-app-unread'];
+    const DESK_KEYS = ['feed-cover-bg', 'feed-ta-cover', 'feed-ta-name', 'feed-ta-avatar', 'feed-user-name', 'feed-user-avatar'];
     function run() {
       try {
         const root = window.xyStore('xy-home-v2');
@@ -29,6 +39,21 @@
             try { root.set(k, dv); } catch (e) {}
             try { def.remove(k); } catch (e) {}
           }
+        });
+        DESK_KEYS.forEach(function (k) {
+          let dv = null;
+          try { dv = def.get(k); } catch (e) {}
+          if (dv !== null && dv !== undefined && dv !== '') return; // per-cid 现行值：绝不动更不删（#232 根因）
+          let rv = null;
+          try { rv = root.get(k); } catch (e) {}
+          if (rv === null || rv === undefined || rv === '') return;
+          // 收养旧全局值前先向 IDB 确认 default 桌面确实没有该键（三态：false=没有才收养；
+          // true=大值在 IDB 只是 def.get 看不到 / null=探测失败，都保守跳过，下次刷新再试）
+          try {
+            window.idbHasKey('xy-home-v2:default:' + k).then(function (has) {
+              if (has === false) { try { def.set(k, rv); } catch (e) {} }
+            }).catch(function () {});
+          } catch (e) {}
         });
         // v3.25.x：TA 发帖调度键反向归位（修复用户反馈「回复设置里设了联系人每天最多发
         // N 条朋友圈，联系人照样无限发」）——上面 KEYS 的回收逻辑曾把 default 桌面命名
@@ -269,6 +294,32 @@
   //   save 只暂存内存（feedPending），绝不落盘；load 合并暂存，弹窗提示过的动态都可见。
   let feedDbReady = false;
   let feedPending = null;
+  // #187 权威键守卫——iPad QQ浏览器/WKWebView 系（iOS 挂后台杀 IDB 连接家族）首发
+  //   idbGet 4s+4s 超时返回 undefined，与「键不存在」不可分；此时 feed-posts >200KB
+  //   只进 IDB（LS 无副本、回填未到）→ load() 手上只有剥图快照。旧代码三条写回路径
+  //  （feedMergeFromIdb 合并写回 / save 非空直写 / 15s 保险丝 load 写回）都会把这个
+  //   无图版本整包写进权威键：图片从数据层永久消失，之后 IDB 恢复也救不回（用户实报
+  //   iPad QQ浏览器朋友圈只剩文字不显示图片，页内无任何 img 加载错误＝img 没渲染出来）。
+  //   守则：本会话读到过权威数据（feedAuthSeen，含清空后的 '[]'）或 LS/内存缓存里已有
+  //   权威副本（store.get(KEY) 非空＝回填已完成）→ 照常写；否则 idbHasKey 探测——
+  //   确认存在＝绝不写回（本次增量留内存 pending + 剥图快照文本兜底，10s 后重读权威），
+  //   确认不存在（全新安装/丢库重建）＝放心写（保住原「并集保数据」行为）；探测失败
+  //  （null＝存储繁忙）按存在处理：宁丢本次增量，不毁权威历史。
+  let feedAuthSeen = false;
+  let feedAuthWritable = null;   // null=未探测；true=确认可写（权威键确实不存在）；false=权威仍在
+  let feedAuthRetried = 0;       // 守卫拒写后的权威重读次数上限 2（间隔 10s，防病理存储下无限循环）
+  function feedGuardWrite(raw) {
+    if (feedAuthSeen || store.get(KEY) !== null) {
+      try { store.set(KEY, raw); } catch (e) {}
+      return Promise.resolve(true);
+    }
+    if (!window.idbHasKey) { try { store.set(KEY, raw); } catch (e) {} return Promise.resolve(true); }
+    if (feedAuthWritable === null) feedAuthWritable = window.idbHasKey(uid + ':' + KEY).then(ok => ok === false);
+    return feedAuthWritable.then(writable => {
+      if (writable) { try { store.set(KEY, raw); } catch (e) {} }
+      return writable;
+    });
+  }
   // v3.10.x 修复「评论聊了多个回合次日只剩一条」：同 id 动态深度合并。
   //   原实现 post 级后者整条覆盖——启动权威回读 feedMergeFromIdb 里本地副本（LS 主键/
   //   剥图快照）优先级高于 IDB，而本地副本可能陈旧：主键 >200KB 时只进 IDB 不进 LS，
@@ -346,7 +397,9 @@
     // v3.7.x：权威读取（feedDbReady=false）期间收到的动态只暂存在 feedPending，原 load()
     //   只读持久层 → 弹窗/通知提示了新动态、朋友圈列表却是空白（OPPO Edge IDB 慢时复现）；
     //   这里把暂存动态按 id 合并在持久层之上，提示过的一切动态都可见可赞可评。
-    if (!feedDbReady && feedPending && feedPending.length) {
+    //   #187：去掉 !feedDbReady 前置——守卫拒写（权威键仍在、本次只是读超时）时暂存不落盘，
+    //   就绪后也必须继续合并渲染（mergePosts 按 id 去重，不会重复显示）。
+    if (feedPending && feedPending.length) {
       list = mergePosts(list, feedPending);
     }
     return list;
@@ -403,12 +456,12 @@
       //   IDB 大键分流 + 内存) 与快照落盘。只写非空，不会重演旧的「save([]) 用空值
       //   覆盖 IDB 旧动态」问题；IDB 合并是并集，稍后回填也不会丢。
       if (arr.length) {
-        try { store.set(KEY, raw); } catch (e) {}
+        feedGuardWrite(raw);
         persistSnap(arr);
       }
       return;
     }
-    store.set(KEY, raw);
+    feedGuardWrite(raw);
     // 清空时同步清掉旧快照（防清空后又被陈旧快照"恢复"出已删除的动态）
     if (!arr.length) {
       try { localStorage.removeItem('xy-home-v2:default:' + SNAP_KEY); } catch (e) {}
@@ -1051,7 +1104,16 @@ function comStickerGroups() {
     .map(([n, a]) => [n, (a || []).filter(s => typeof s === 'string' && s.indexOf('data:') === 0)])
     .filter(([, a]) => a.length);
   if (comStickerTab === 'ta') return onlyData((window.getMediaGroups && window.getMediaGroups('sticker')) || []);
-  // v3.12.x：我的表情包改全局键（与聊天面板同源，各桌面互通）
+  // FIX 2026-09-04 #154 朋友圈评论「我的表情包」与聊天面板不同步——优先取 chat.js
+  // 维护的最新内存副本（window.getMyEmojiGroups，启动/打开时已用 IDB 权威值自愈；
+  // store 层对该键可能停在旧 LS 快照或大键驻留挂起，读不到新值）。chat.js 异常时
+  // 保留旧 store 读路径兜底，行为不变。
+  try {
+    if (window.getMyEmojiGroups) {
+      const g = window.getMyEmojiGroups();
+      if (Array.isArray(g) && g.length) return onlyData(g);
+    }
+  } catch (e) {}
   try {
     const v = JSON.parse(window.xyStore('xy-home-v2').get('my-emoji-groups') || 'null');
     return Array.isArray(v) ? onlyData(v) : [];
@@ -1616,8 +1678,9 @@ if (comInput) comInput.addEventListener('keydown', (e) => { if (e.key === 'Enter
     // v3.7.x 兜底：render 后若列表没出现刚发布的动态（Edge 上 IDB 慢/门槛暂存时序异常），
     //   强制把 list 直接落盘 + 重渲染，确保发布后立刻可见。用户主动发布应立即持久化，
     //   绕过 save 门槛（门槛防的是 maybeAutoPost 等自动 save 覆盖，用户主动发布含完整 list）
+    //   #187：仍走守卫——病理窗口下手上的 list 可能来自剥图快照，裸写会把无图版本盖进权威键
     if (!document.getElementById('feed-post-' + id)) {
-      try { store.set(KEY, JSON.stringify(list)); } catch (e) {}
+      feedGuardWrite(JSON.stringify(list));
       renderVisible();
     }
     toast('已发布');
@@ -2245,9 +2308,12 @@ if (comInput) comInput.addEventListener('keydown', (e) => { if (e.key === 'Enter
   function feedMergeFromIdb(v) {
     try {
       const pending = feedPending || [];
-      feedPending = null;
       let base = [];
-      if (v && typeof v === 'string' && v.length > 2) {
+      // v 是超长字符串＝权威读成功（'[]'≤2 字符按未读到处理，同原判定）；undefined＝
+      // 超时/异常，与键不存在不可分 → feedAuthSeen 只在真读到权威数据时置位
+      const authOk = !!(v && typeof v === 'string' && v.length > 2);
+      if (authOk) {
+        feedAuthSeen = true;
         const idbArr = JSON.parse(v);
         if (Array.isArray(idbArr)) base = idbArr.map(normPost);
       }
@@ -2256,7 +2322,27 @@ if (comInput) comInput.addEventListener('keydown', (e) => { if (e.key === 'Enter
       if (raw !== null) { try { const a = JSON.parse(raw); if (Array.isArray(a)) cur = a.map(normPost); } catch (e) {} }
       if (!cur.length) cur = loadSnap().map(normPost);
       const merged = mergePosts(base, mergePosts(cur, pending));
-      if (merged.length) store.set(KEY, JSON.stringify(merged));
+      if (!merged.length) { if (authOk && feedPending === pending) feedPending = null; return; }
+      // #187：写回走守卫——权威读失败且手上可能是剥图快照时，探测确认权威键仍在就绝不写回
+      feedGuardWrite(JSON.stringify(merged)).then(written => {
+        if (written) {
+          // 权威键已更新为 merged 才清暂存（期间新到的动态不误清）
+          if (feedPending === pending) feedPending = null;
+          return;
+        }
+        // 拒写＝权威键仍在 IDB 里（本次只是读超时）：增量留在内存继续渲染显示，
+        // persistSnap 已把文本落快照兜底；10s 后重读权威（最多 2 次）恢复完整视图
+        if (feedPending === null) feedPending = pending;
+        else if (feedPending !== pending) feedPending = mergePosts(pending, feedPending);
+        if (feedAuthRetried >= 2 || !window.idbGet) return;
+        feedAuthRetried++;
+        setTimeout(function () {
+          window.idbGet(uid + ':' + KEY).then(v2 => {
+            feedMergeFromIdb(v2);
+            if (v2 && typeof v2 === 'string' && v2.length > 2) render();
+          });
+        }, 10000);
+      });
     } catch (e) { /* 解析失败仍置就绪，避免下次启动重复合并 */ }
   }
   try {
@@ -2308,7 +2394,9 @@ if (comInput) comInput.addEventListener('keydown', (e) => { if (e.key === 'Enter
   //   正常情况 idbGet 早已返回，该保险只在病理场景触发，feedDbReady 已真时直接跳过）
   setTimeout(function () {
     if (feedDbReady) return;
-    try { const all = load(); if (all.length) store.set(KEY, JSON.stringify(all)); } catch (e) {}
+    // #187：保险丝写回同样走守卫——病理存储下 load() 可能只是剥图快照，直接写会把
+    //   无图版本盖进权威键（永久丢图），守卫探测确认权威键不存在时才落盘
+    try { const all = load(); if (all.length) feedGuardWrite(JSON.stringify(all)); } catch (e) {}
     feedDbReady = true;
     render();
   }, 15000);

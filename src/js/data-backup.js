@@ -727,6 +727,28 @@
     } catch (e) { return false; }
   }
 
+  // v3.26.x #172：通用「小文件导出」三级降级链（美化方案/聊天方案等）——
+  // 与 saveBackupFile 同源：①系统分享面板（iPhone 主屏安装 standalone 没有下载管理器、
+  // a[download] 静默无反应的唯一可用保存通道）②系统保存框 ③确认后 a[download] 下载。
+  // 修「桌面/聊天美化方案无法导出」（f4158f6 收敛为仅文件下载后，standalone/壳浏览器全断）。
+  // 返回 'ok'（已分享/已保存）/ 'cancel'（用户取消）/ 'blocked'（交给确认弹窗下载）/ 'fail'（链路不可用）。
+  window.mochiExportFile = function (json, fname, title) {
+    let blob;
+    try { blob = new Blob([json], { type: 'application/json;charset=utf-8' }); } catch (e) { return Promise.resolve('fail'); }
+    return Promise.resolve(saveBackupFile(blob, fname)).then((res) => {
+      if (res === 'ok') { toast('已保存「' + fname + '」'); return 'ok'; }
+      if (res === 'cancel') return 'cancel';
+      if (window.openModal) {
+        window.openModal('文件已打包（' + fmtSize(blob.size) + '）', '', () => {
+          if (anchorDownload(blob, fname)) toast('已导出「' + fname + '」');
+          else toast('仍未触发下载，请改用复制文字或换系统浏览器重试');
+        }, { noInput: true, staticText: '点「确定」开始下载保存到本机，点「取消」放弃本次保存。' });
+        return 'blocked';
+      }
+      return 'fail';
+    });
+  };
+
   // v3.27.x：体积友好显示——<1MB 显示 KB，≥1MB 显示 MB（原导出只显示 KB，大备份上千 KB 不便读）
   function fmtSize(n) {
     if (!n) return '0 KB';

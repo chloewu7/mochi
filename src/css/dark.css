@@ -211,6 +211,12 @@
   .fav-empty { color:#666; }
   .fav-tab { background:var(--dark-hover); border-color:var(--dark-border-12); color:var(--dark-soft); }
   .fav-tab.sel { background:var(--btn-bg); color:var(--btn-ink); border-color:var(--btn-bg); }
+  /* 收藏批量管理（v3.31.x） */
+  .fav-batch-bar { background:var(--dark-card-92); border-top-color:var(--dark-border); }
+  .fb-btn { background:var(--dark-hover); border-color:var(--dark-border-12); color:var(--dark-soft); }
+  .fb-btn:active { background:rgba(255,255,255,.08); }
+  .fb-btn.fb-del { background:#e05555; color:#fff; }
+  .fav-check { background:var(--dark-hover); border-color:var(--dark-border); }
 
   .mem-card { background:var(--dark-card-92); border-color:var(--dark-border); }
   .mem-tip { background:var(--dark-hover); }
@@ -826,6 +832,7 @@
   .gc-set-chev { color:#666; }
   .gc-set-row:active { background:var(--dark-hover); }
   .gc-set-row .txt { color:#ddd; }
+  .gc-set-stepper .txt { color:#ddd; }
   .gc-set-row .val { color:#888; }
   .gc-set-row .chev { color:#555; }
   .gc-set-warn { color:#e08a7a; background:rgba(224,138,122,.08); border-color:rgba(224,138,122,.35); }

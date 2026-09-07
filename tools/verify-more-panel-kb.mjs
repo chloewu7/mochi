@@ -29,7 +29,7 @@ if (!chromePath) { console.error('找不到 Chrome/Edge'); process.exit(1); }
 const tmpDir = mkdtempSync(join(tmpdir(), 'mochi-verify-morekb-'));
 writeFileSync(join(tmpDir, 'index.html'), readFileSync(join(root, 'index.html'), 'utf8'));
 const baseUrl = 'file:///' + normalize(tmpDir).split(sep).join('/') + '/index.html';
-const cdpPort = 9400 + Math.floor(Math.random() * 300);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9400 + Math.floor(Math.random() * 300));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--disable-audio-output', '--disable-component-extensions-with-background-pages', '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-morekb-' + Date.now()),

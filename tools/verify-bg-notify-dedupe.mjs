@@ -42,7 +42,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
-const cdpPort = 9900 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9900 + Math.floor(Math.random() * 100));
 const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-bgnotify-' + Date.now()), '--remote-debugging-port=' + cdpPort, 'about:blank'], { stdio: 'ignore' });
 
 let ws = null, msgId = 0; const pend = new Map();
@@ -98,16 +98,17 @@ try {
   ok('返回字段齐全（hiddenForMs/tooFreshHidden/dupNotified/dupInChat）',
     probe && ['hiddenForMs', 'tooFreshHidden', 'dupNotified', 'dupInChat'].every(k => k in probe), probe);
 
-  console.log('\n== T2 刚入记录的 TA 消息 → 闸门②命中 ==');
+  console.log('\n== T2 刚入记录的 TA 消息 → 自查豁免（#129 修正：探针按产品口径传 refTs=到达时刻） ==');
   await evalJs(`window.chatAddSystem && window.chatAddSystem('今晚一起去吃火锅呀'); true`);
   await sleep(120);
-  const d2 = await evalJs(`window.bgNotifyGateInfo('今晚一起去吃火锅呀')`);
+  const d2 = await evalJs(`window.bgNotifyGateInfo('今晚一起去吃火锅呀', undefined, Date.now())`);
   ok('刚到达的新消息不自查判重（不再被自己吞掉弹窗）', d2 && d2.dupInChat === false, d2);
 
-  console.log('\n== T2b 第二条相同文本 → 真重复仍被拦 ==');
+  console.log('\n== T2b 第二条相同文本（超过 2.5s 新鲜窗后到达）→ 真重复仍被拦 ==');
+  // 闸门豁免窗=到达时刻 ±2.5s 内的同文本视为同一波到达不判重；真重复需等首条老化出窗
   await evalJs(`window.chatAddSystem && window.chatAddSystem('今晚一起去吃火锅呀'); true`);
-  await sleep(120);
-  const d2b = await evalJs(`window.bgNotifyGateInfo('今晚一起去吃火锅呀')`);
+  await sleep(2700);
+  const d2b = await evalJs(`window.bgNotifyGateInfo('今晚一起去吃火锅呀', undefined, Date.now())`);
   ok('第二条相同消息 → dupInChat=true（真重复仍去重）', d2b && d2b.dupInChat === true, d2b);
 
   console.log('\n== T3 窗口外旧消息/无关文本不误伤 ==');
@@ -117,9 +118,29 @@ try {
   const d3new = await evalJs(`window.bgNotifyGateInfo('一条全新的没说过的消息')`);
   ok('全新文本 → dupInChat=false', d3new && d3new.dupInChat === false && d3new.dupNotified === false, d3new);
 
-  console.log('\n== T4 页面可见态 → 过渡期判定 ==');
+  console.log('\n== T4 切后台过渡期判定（#129 修正：无头页恒 visible，须伪造 visibilitychange——v3.16 起 lastHiddenAt 只在真实切后台事件置位） ==');
+  await evalJs(`(function(){
+    try {
+      Object.defineProperty(document, 'visibilityState', { get: function(){ return 'hidden'; }, configurable: true });
+      Object.defineProperty(document, 'hidden', { get: function(){ return true; }, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      return 'hidden-emulated';
+    } catch(e){ return 'err:' + e.message; }
+  })()`);
+  await sleep(150);
   const d4 = await evalJs(`window.bgNotifyGateInfo('任意文本')`);
-  ok('可见态 tooFreshHidden=true（hiddenForMs 极小）', d4 && d4.tooFreshHidden === true && d4.hiddenForMs < 5000, d4);
+  ok('切后台后 tooFreshHidden=true（过渡期内积压不弹）', d4 && d4.tooFreshHidden === true, d4);
+  await evalJs(`(function(){
+    try {
+      Object.defineProperty(document, 'visibilityState', { get: function(){ return 'visible'; }, configurable: true });
+      Object.defineProperty(document, 'hidden', { get: function(){ return false; }, configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+      return 'visible-restored';
+    } catch(e){ return 'err:' + e.message; }
+  })()`);
+  await sleep(150);
+  const d4b = await evalJs(`window.bgNotifyGateInfo('任意文本')`);
+  ok('回前台后 tooFreshHidden 复位 false', d4b && d4b.tooFreshHidden === false, d4b);
 
   console.log('\n== T5 归一化：带图/带语音段的文本与可见文字同指纹 ==');
   // 旧式语音消息：入库「名称|||音频dataURL」，两条相同名称入库后，探针应命中（去重仍有效）

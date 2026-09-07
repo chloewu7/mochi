@@ -19,6 +19,7 @@ node_modules/
 
 # 调试截图/预览图与项目结构快照（不入库）
 tools/*.png
+tools/*.log
 codebase-structure.md
 
 # 临时截图

@@ -1,12 +1,12 @@
-// ===== 专项：红包 / 心意市集 余额行修改「我的 / TA」金额（单层弹窗重构） =====
+// ===== 红包 / 心意市集 余额行「向 Mochi 申请心意币」弹窗（v3.15.x 申请制统一账本口径） =====
 // 用法：node tools/verify-wallet-edit.mjs
-// 背景（用户反馈：红包和心意集市里无法修改联系人的金额）：
-//   旧版点余额行后「我的→TA」两步连续 openModal（60ms 间隔）——真机上第二层
-//   常因键盘收起/再聚焦竞态无法输入（=改不了联系人的金额），第一步输入非法
-//   还会静默跳过第二步。重构为单层弹窗：胶囊选侧 + 一个输入框（留空不改）。
+// 背景：①v3.13/v3.14 把「我的→TA」两步链式弹窗重构为单层弹窗（胶囊选侧+一个输入框）；
+//   ②v3.15.x 语义从「直接设置金额」改为「申请制」（Mochi 打款自动入账，连续申请，留空【完成】结束）；
+//   ③v3.15.x 二轮红包与市集重新统一为全局一本账（根键 xy-home-v2:gift-wallet，默认 ¥520/¥520）。
+// 本脚本 2026-09-05（#129）按申请制+全局账本口径重写期望；旧「直接改金额」断言已随交互废弃。
 // 验证（自组装临时站点跑真实 UI，同 verify-mail-cfg-per-cid 先例；不触发 build）：
-//   静态断言接线 + 运行时走 点余额行→(选胶囊)→输入→确定 全链路，覆盖
-//   默认侧/TA 侧/留空保护/非法输入/回显，红包与心意币两个入口都测。
+//   静态断言接线 + 运行时走 点余额行→(选胶囊)→输入→申请/完成 全链路，覆盖
+//   默认侧/TA 侧/留空结束/非法输入/回显，红包与心意币两个入口都测。
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFileSync, statSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -34,9 +34,9 @@ function check(desc, ok, detail) {
     /pills:\s*\[\{\s*value:\s*'my'/.test(b1) && !/setTimeout\(\(\) => \{\s*window\.openModal/.test(b1));
   check('A2 giftEditWallet 同款重构：无嵌套二级弹窗',
     /pills:\s*\[\{\s*value:\s*'my'/.test(b2) && !/setTimeout\(function \(\) \{\s*window\.openModal/.test(b2));
-  check('A3 两处带余额 staticText 提示 + 数字键盘 inputmode/placeholder',
-    /留空确定 = 不改动/.test(b1) && /inputmode:\s*'decimal'/.test(b1) && /placeholder:\s*'/.test(b1) &&
-    /留空确定 = 不改动/.test(b2) && /inputmode:\s*'decimal'/.test(b2) && /placeholder:\s*'/.test(b2));
+  check('A3 两处带余额 staticText 提示 + 数字键盘 inputmode/placeholder（v3.15.x 申请制口径：留空点【完成】结束）',
+    /留空点【完成】结束/.test(b1) && /inputmode:\s*'decimal'/.test(b1) && /placeholder:\s*'/.test(b1) &&
+    /留空点【完成】结束/.test(b2) && /inputmode:\s*'decimal'/.test(b2) && /placeholder:\s*'/.test(b2));
 }
 
 const candidates = [
@@ -63,7 +63,7 @@ let outHtml = '';
   const jsAll = jsFiles.map((f) => {
     try { return readFileSync(join(root, 'src', 'js', f), 'utf8'); } catch (e) { return ''; }
   }).join('\n');
-  if (!/修改钱包金额（元）/.test(jsAll) || !/修改心意币（元）/.test(jsAll)) { console.error('JS 拼接缺少新版钱包弹窗'); process.exit(1); }
+  if (!/向 Mochi 申请心意币/.test(jsAll)) { console.error('JS 拼接缺少申请制钱包弹窗'); process.exit(1); }
   outHtml = html.replace('/*__STYLES__*/', () => cssAll).replace('/*__SCRIPTS__*/', () => jsAll);
 }
 writeFileSync(join(tmpSite, 'index.html'), outHtml);
@@ -83,7 +83,7 @@ function ext(p) { const i = p.lastIndexOf('.'); return i < 0 ? '' : p.slice(i); 
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9700 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 100));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-wallet-' + Date.now()),
@@ -141,18 +141,18 @@ async function loadApp() {
   await sleep(400);
 }
 
-// 种子余额（default 桌面），重启一次让各模块渲染读到种子值
+// 种子：走应用自身 API giftWalletSet 写全局一本账（xy-home-v2:gift-wallet），免重启免被 idbRestore 回填覆盖
 await loadApp();
 await evalJs(`(function(){
   try{
-    localStorage.setItem('xy-home-v2:default:rp-wallet',JSON.stringify({myBalance:8800,systemBalance:9900}));
-    localStorage.setItem('xy-home-v2:default:gift-wallet',JSON.stringify({myBalance:1234,systemBalance:5678}));
-  }catch(e){}
-  return true;
+    if (typeof window.giftWalletSet === 'function') { window.giftWalletSet({myBalance:8800, systemBalance:9900}); return 'api'; }
+    localStorage.setItem('xy-home-v2:gift-wallet', JSON.stringify({myBalance:8800, systemBalance:9900}));
+    return 'ls';
+  }catch(e){ return 'err:' + e.message; }
 })()`);
-await loadApp();
+try { await evalJs("(function(){if(typeof window.rpRenderBalance==='function')window.rpRenderBalance();return true;})()"); } catch (e) {}
 
-const walletOf = async (key) => JSON.parse(await evalJs(`(function(){try{return localStorage.getItem('xy-home-v2:default:${key}')||'{}';}catch(e){return '{}';}})()`));
+const walletOf = async () => JSON.parse(await evalJs(`(function(){try{return localStorage.getItem('xy-home-v2:gift-wallet')||'{}';}catch(e){return '{}';}})()`));
 
 // 弹窗辅助：打开→快照；pill(n) 点第 n 个胶囊；type(s) 输入；ok 确定
 async function openBy(id) {
@@ -178,8 +178,8 @@ async function ok() {
 
 console.log('== 红包钱包 ==');
 let s1 = JSON.parse(await openBy('rp-balance'));
-check('B1 点余额行出单层弹窗：标题/双胶囊/空输入/余额提示',
-  s1.title === '修改钱包金额（元）' && s1.pills.length === 2 && s1.val === '' && /¥88\.00/.test(s1.st) && /¥99\.00/.test(s1.st), s1);
+check('B1 点余额行出申请弹窗：标题/双胶囊/空输入/余额提示',
+  s1.title === '向 Mochi 申请心意币' && s1.pills.length === 2 && s1.val === '' && /¥88\.00/.test(s1.st) && /¥99\.00/.test(s1.st), s1);
 
 async function modalOpen() {
   return JSON.parse(await evalJs(`(function(){
@@ -192,58 +192,59 @@ async function modalOpen() {
 await pill(1); // 选「TA」
 await typeIn('12.34');
 await ok();
-let w = await walletOf('rp-wallet');
+let w = await walletOf();
 s1 = await modalOpen();
-check('B2 选 TA + 12.34 → 只改 TA 余额；弹窗保持打开并翻转到「我的」侧',
-  w.systemBalance === 1234 && w.myBalance === 8800 && s1.open === true && s1.onPill === '我的' && s1.okTxt === '完成', { w, m: s1 });
+check('B2 选 TA 申请 12.34 → Mochi 打款只入 TA 侧；弹窗保持打开并翻转到「我的」侧',
+  w.systemBalance === 11134 && w.myBalance === 8800 && s1.open === true && s1.onPill === '我的心意币' && s1.okTxt === '完成', { w, m: s1 });
 
 await typeIn('55.55'); // 续填另一侧：当前胶囊=我的
 await ok();
-w = await walletOf('rp-wallet');
+w = await walletOf();
 s1 = await modalOpen();
-check('B3 同弹窗续填我的 55.55 → 我的余额更新且仍不关窗',
-  w.myBalance === 5555 && w.systemBalance === 1234 && s1.open === true, { w, m: s1 });
+check('B3 同弹窗续申请我的 55.55 → 我的余额入账且仍不关窗',
+  w.myBalance === 14355 && w.systemBalance === 11134 && s1.open === true, { w, m: s1 });
 
 await ok(); // 留空点【完成】→ 关闭
 s1 = await modalOpen();
-check('B4 留空点【完成】→ 弹窗关闭（连续编辑结束）', s1.open === false);
+check('B4 留空点【完成】→ 弹窗关闭（连续申请结束）', s1.open === false);
 
 const echo = await evalJs("(function(){return (document.getElementById('rp-balance')||{}).textContent||'';})()");
-check('B5 余额行回显新值', /55\.55/.test(echo) && /12\.34/.test(echo), echo);
+check('B5 余额行回显新值', /143\.55/.test(echo) && /111\.34/.test(echo), echo);
 
 s1 = JSON.parse(await openBy('rp-balance'));
 await pill(1); // 选 TA 但留空
 await ok();
-w = await walletOf('rp-wallet');
-check('B6 选侧但留空确定 → 双侧都不变且关闭（留空=不改）',
-  w.myBalance === 5555 && w.systemBalance === 1234 && (await modalOpen()).open === false, w);
+w = await walletOf();
+check('B6 选侧但留空确定 → 双侧都不变且关闭（留空=结束）',
+  w.myBalance === 14355 && w.systemBalance === 11134 && (await modalOpen()).open === false, w);
 
 s1 = JSON.parse(await openBy('rp-balance'));
 await typeIn('abc');
 await ok();
-w = await walletOf('rp-wallet');
+w = await walletOf();
 const toastTxt = await evalJs("(function(){var t=document.getElementById('cc-toast');return t?t.textContent:'';})()");
-check('B7 非法输入 → 提示且双侧不变、正常关闭', w.myBalance === 5555 && w.systemBalance === 1234 && /金额无效/.test(toastTxt) && (await modalOpen()).open === false, { w, toastTxt });
+check('B7 非法输入 → 提示且双侧不变、正常关闭', w.myBalance === 14355 && w.systemBalance === 11134 && /金额需大于 0/.test(toastTxt) && (await modalOpen()).open === false, { w, toastTxt });
 
 console.log('== 心意市集 ==');
 s1 = JSON.parse(await openBy('gift-balance'));
-check('C1 点送礼面板余额行出弹窗：标题/胶囊/余额提示', s1.title === '修改心意币（元）' && s1.pills.length === 2 && /¥12\.34/.test(s1.st) && /¥56\.78/.test(s1.st), s1);
+check('C1 点送礼面板余额行走同一申请弹窗：标题/胶囊/余额提示（全局一本账延续 B 段余额）',
+  s1.title === '向 Mochi 申请心意币' && s1.pills.length === 2 && /¥143\.55/.test(s1.st) && /¥111\.34/.test(s1.st), s1);
 await pill(1);
 await typeIn('7.89');
 await ok();
-w = await walletOf('gift-wallet');
+w = await walletOf();
 s1 = await modalOpen();
-check('C2 选 TA + 7.89 → 只改 TA 心意币，弹窗保持打开', w.systemBalance === 789 && w.myBalance === 1234 && s1.open === true, { w });
+check('C2 选 TA 申请 7.89 → 只入 TA 心意币，弹窗保持打开', w.systemBalance === 11923 && w.myBalance === 14355 && s1.open === true, { w });
 await evalJs("(function(){var b=document.getElementById('modal-cancel');if(b)b.click();return true;})()");
 await sleep(200);
-check('C3 取消随时可退出连续编辑', (await modalOpen()).open === false);
+check('C3 取消随时可退出连续申请', (await modalOpen()).open === false);
 
 s1 = JSON.parse(await openBy('market-balance'));
 await typeIn('3.50');
 await ok();
-w = await walletOf('gift-wallet');
+w = await walletOf();
 await evalJs("(function(){var b=document.getElementById('modal-cancel');if(b)b.click();return true;})()");
-check('C4 市集页余额行走同一弹窗：默认侧改我的心意币（12.34→3.50）', w.myBalance === 350 && w.systemBalance === 789, w);
+check('C4 市集页余额行走同一弹窗：默认侧入账我的心意币（+3.50）', w.myBalance === 14705 && w.systemBalance === 11923, w);
 
 const pass = results.filter(r => r.ok).length;
 console.log('\n结果：' + pass + '/' + results.length + ' 项通过');

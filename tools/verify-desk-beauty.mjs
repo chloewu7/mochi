@@ -38,7 +38,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9800 + Math.floor(Math.random() * 150);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9800 + Math.floor(Math.random() * 150));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-verify-deskbeauty-' + Date.now()),
@@ -105,15 +105,15 @@ await sleep(2200);
 for (let i = 0; i < 40; i++) { if (await ev('!!window.__mochiDataReady')) break; await sleep(250); }
 await ev("(function(){var e=document.getElementById('splash-enter');if(e&&!e.hidden)e.click();var s=document.getElementById('splash');if(s&&!s.classList.contains('hide')){s.classList.add('hide');s.hidden=true;}return true;})()");
 await sleep(800);
-const bgAfterLoad = await ev("(function(){var ph=document.querySelector('.phone');return ph.style.backgroundImage||'';})()");
-check('刷新后预设壁纸已应用（.phone 有渐变背景）', String(bgAfterLoad || '').indexOf('gradient') >= 0, String(bgAfterLoad).slice(0, 60));
+const bgAfterLoad = await ev("(function(){var l=document.getElementById('phone-bg-layer');return (l&&l.style.backgroundImage)||'';})()");
+check('刷新后预设壁纸已应用（#147 常驻图层有渐变背景）', String(bgAfterLoad || '').indexOf('gradient') >= 0, String(bgAfterLoad).slice(0, 60));
 // 切 tab 后再切回
 await ev("(function(){var t=document.querySelector('.tab[data-page=\"page-settings\"]');if(t)t.click();return true;})()");
 await sleep(300);
 await ev("(function(){var t=document.querySelector('.tab[data-page=\"page-phone\"]');if(t)t.click();return true;})()");
 await sleep(300);
-const bgAfterTab = await ev("(function(){var ph=document.querySelector('.phone');return ph.style.backgroundImage||'';})()");
-check('切 tab 后预设壁纸仍在', String(bgAfterTab || '').indexOf('gradient') >= 0, String(bgAfterTab).slice(0, 60));
+const bgAfterTab = await ev("(function(){var l=document.getElementById('phone-bg-layer');return (l?l.style.backgroundImage+'|op:'+l.style.opacity:'');})()");
+check('切 tab 后预设壁纸仍在（图层 opacity 恢复 1）', String(bgAfterTab || '').indexOf('gradient') >= 0 && /op:1/.test(String(bgAfterTab)), String(bgAfterTab).slice(0, 60));
 
 // ============ Bug 1：恢复默认桌面 ============
 console.log('\n===== Bug1 恢复默认桌面（只点底部确定）=====');
@@ -179,6 +179,38 @@ const fileInputN = await ev("(function(){return document.querySelectorAll('input
 check('确认「上传图片」后已创建 file input（pickFile 触发）', Number(fileInputN) >= 1, 'fileInput=' + fileInputN);
 // 清残留 input（防止影响后续 freshLoad）
 await ev("(function(){document.querySelectorAll('input[type=file]').forEach(function(i){try{if(i.parentNode)i.parentNode.removeChild(i);}catch(e){}});return true;})()");
+
+// ============ Bug 5 (#219)：背景模糊/遮罩层必须盖在壁纸常驻图层之上 ============
+// 回归 v3.26.x（小米15Pro/Chrome 报障「背景模糊和背景遮罩功能用不了，调整了数据背景没有
+// 变化」，用户明说其他机型也有）：#147 壁纸改画到常驻图层 #phone-bg-layer（z-index:1）
+// 后，.phone-bg-mask（原 z-index:0）被压在壁纸下面——白遮罩被盖=调遮罩无感，
+// backdrop-filter 向下采样不含壁纸=调模糊也无感。修复：遮罩层 z-index:0→2。
+console.log('\n===== Bug5 (#219) 背景模糊/遮罩层级 =====');
+await freshLoad(null);
+// M1 静态层级：.phone-bg-mask 计算 zIndex 必须 > #phone-bg-layer 的 zIndex
+const zInfo = await ev("(function(){var m=document.querySelector('.phone-bg-mask');var l=document.getElementById('phone-bg-layer');if(!m)return 'no-mask';var zi=parseInt(getComputedStyle(m).zIndex,10);var zl=l?parseInt(getComputedStyle(l).zIndex,10):0;return JSON.stringify({zi:zi,zl:zl});})()");
+try { var zObj = JSON.parse(zInfo); } catch (e) { var zObj = { zi: 0, zl: 0 }; }
+check('M1 遮罩层 zIndex(' + zObj.zi + ') > 壁纸图层 zIndex(' + zObj.zl + ')（#219 核心）', zObj.zi > zObj.zl, zInfo);
+// M2 模糊生效（#240 起载体=壁纸层自滤）：预置 bg-blur=12 重载 → .desk-blur-on 挂上、壁纸层 computed filter 含 blur（旧 backdrop 载体在小米15Pro/Chrome 151 真机采样不生效，已由 #240 替代）
+await ev("(function(){var s=window.activeStore();s.set('bg-blur','12');return true;})()");
+await cdp('Page.navigate', { url: baseUrl + '/index.html' });
+await sleep(2000);
+for (let i = 0; i < 40; i++) { if (await ev('!!window.__mochiDataReady')) break; await sleep(250); }
+await ev("(function(){var e=document.getElementById('splash-enter');if(e&&!e.hidden)e.click();var s=document.getElementById('splash');if(s&&!s.classList.contains('hide')){s.classList.add('hide');s.hidden=true;}return true;})()");
+await sleep(800);
+const blurInfo = await ev("(function(){var p=document.querySelector('.phone');var l=document.getElementById('phone-bg-layer');if(!p||!l)return 'no-layer';var c=getComputedStyle(l);return JSON.stringify({blurOn:p.classList.contains('desk-blur-on'),bf:c.filter||''});})()");
+try { var bObj = JSON.parse(blurInfo); } catch (e) { var bObj = { blurOn: false, bf: '' }; }
+check('M2 bg-blur=12 时 .desk-blur-on 挂上且壁纸层 filter 激活（#240 新载体）', bObj.blurOn === true && String(bObj.bf).indexOf('blur') >= 0, blurInfo);
+// M3 遮罩生效：预置 bg-mask-op=60 重载 → 遮罩层背景 alpha≈0.6（半透明白真盖在壁纸上=背景变淡）
+await ev("(function(){var s=window.activeStore();s.set('bg-mask-op','60');return true;})()");
+await cdp('Page.navigate', { url: baseUrl + '/index.html' });
+await sleep(2000);
+for (let i = 0; i < 40; i++) { if (await ev('!!window.__mochiDataReady')) break; await sleep(250); }
+await ev("(function(){var e=document.getElementById('splash-enter');if(e&&!e.hidden)e.click();var s=document.getElementById('splash');if(s&&!s.classList.contains('hide')){s.classList.add('hide');s.hidden=true;}return true;})()");
+await sleep(800);
+const maskInfo = await ev("(function(){var m=document.querySelector('.phone-bg-mask');if(!m)return 'no-mask';var c=getComputedStyle(m).backgroundColor;var mt=c.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/);return JSON.stringify({bg:c,a:mt?parseFloat(mt[4]||'1'):1});})()");
+try { var mkObj = JSON.parse(maskInfo); } catch (e) { var mkObj = { a: 0 }; }
+check('M3 bg-mask-op=60 时遮罩 alpha≈0.6（白遮罩真盖在壁纸上）', mkObj.a > 0.55 && mkObj.a < 0.65, maskInfo);
 
 // ============ Bug 4：应用美化方案（桌面，只点底部确定） ============
 console.log('\n===== Bug4 应用桌面美化方案（只点底部确定）=====');

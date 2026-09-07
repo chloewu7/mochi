@@ -86,7 +86,7 @@ const candidates = [
 const chromePath = candidates.find((p) => { try { return statSync(p).isFile(); } catch (e) { return false; } });
 if (!chromePath) { console.error('找不到 Chrome/Edge，请设置 CHROME_PATH'); process.exit(1); }
 
-const cdpPort = 9700 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 100));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-ios-flash-' + Date.now()),

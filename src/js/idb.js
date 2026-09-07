@@ -20,9 +20,28 @@
             db.createObjectStore(STORE);
           }
         };
+        // v3.26.x #135：版本升级被其他标签页/旧连接阻塞——原实现无 onblocked 处理：
+        // blocked 请求既不 onsuccess 也不 onerror，open() 永不落地，所有 open().then
+        // 挂死（含启动回填 idbRestore → 开屏永远「正在加载数据…」）。新版本 SW 换代后
+        // 新旧页面并存时高发（iPad 7 + Edge 实测卡开屏）。收到 blocked 主动失败本次
+        // open（下次调用重建）；旧连接方随后释放或关闭旧标签页后自然恢复。
+        req.onblocked = () => {
+          try { dbPromise = null; } catch (e1) {}
+          reject(new Error('idb open blocked'));
+        };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
       } catch (e) { reject(e); }
+      // v3.26.x #135：open() 兜底落地——iOS/Edge 内核存在「open 请求既不 success
+      // 也不 error 也不 blocked」的挂起形态（IDB 服务进程被杀瞬间发起的请求）。原实现
+      // 各事务超时计时器都注册在 open().then 里，open 不落地则计时器永不启动 →
+      // idbGet/idbGetMany/idbListKeys/idbRestore 全部永久挂起，开屏永远停在
+      // 「正在加载数据…」（iPad 7 + Edge 实测）。8s 未落地判失败：清 dbPromise 让
+      // 下次调用重建连接，调用方 catch 走 LS 兜底/慢保险丝，开屏永不卡死。
+      setTimeout(function () {
+        try { dbPromise = null; } catch (e2) {}
+        reject(new Error('idb open hang'));
+      }, 8000);
     });
     // v3.6.x 修复（open 失败永久不可用）：失败时清 dbPromise 允许下次重试——
     // 原实现缓存 rejected Promise，整个会话 IDB 永久不可用（隐私模式/配额耗尽/
@@ -61,7 +80,12 @@
     try {
       if (typeof document === 'undefined' || !document.addEventListener) return;
       const ua = (window.navigator && window.navigator.userAgent) || '';
-      if (!/iPhone|iPad|iPod/i.test(ua)) return;
+      // v3.26.x #144：iPadOS 13+ UA 伪装成 Macintosh（桌面 Mac UA + 触摸屏）——
+      // iPad 杀后台同样会断 IDB 连接，伪装 UA 的 iPad 此前全部漏掉回前台重建。
+      // 真桌面 Mac maxTouchPoints=0 不会误判（同 device.js #144 isIOS 补分支信号）。
+      const touchMac = ((window.navigator && window.navigator.platform) === 'MacIntel' || /Macintosh/i.test(ua)) &&
+        (window.navigator && window.navigator.maxTouchPoints > 1) && ('ontouchstart' in window);
+      if (!/iPhone|iPad|iPod/i.test(ua) && !touchMac) return;
       const resetNow = function () {
         try {
           if (!dbPromise) return;
@@ -164,17 +188,34 @@
   };
 
   // 批量写入（单事务一次完成，比逐条 idbSet 快；任一条失败则整体失败）
+  // FIX 2026-09-07 #226：补挂起超时骨架（与 idbSet/idbGet 同款）——原实现裸奔：真我/荣耀/
+  // 小米 Edge 等挂起内核上事务既不 oncomplete 也不 onerror，Promise 永不落地，两个调用方
+  // 的「返回 false 兜底」双双失效：
+  // ① wrj 写日志标记微批（wrjMarkFlush）：兜底退回逐键 idbSet 永不触发 → 标记静默丢失 →
+  //    浏览器杀进程回滚 localStorage 后 wrjMergeFromIdb 找不到新标记、自愈失效 → 最近的
+  //    美化/设置/小数据刷新后回退（#166 微批化后该家族多机型复发「刷新后丢美化/丢数据」）；
+  // ② media-pool mochiMediaFlush：writeBuf 已 splice 出去却既没写成功也没回队 → 表情/图片
+  //    令牌静默丢。现按值体积放大超时（与 idbSet 同公式），超时置空连接并 resolve(false)。
   window.idbSetAll = function (pairs) {
     if (!pairs || !pairs.length) return Promise.resolve(true);
     return open().then(db => new Promise((resolve) => {
+      let done = false;
+      let est = 0;
+      try { pairs.forEach(p => { const v = p && p.v; est += (typeof v === 'string' ? v.length : 64); }); } catch (e0) {}
+      const lim = 4000 + (est > 262144 ? Math.min(26000, Math.ceil(est / 262144) * 2000) : 0);
+      const t = setTimeout(function () {
+        if (done) return; done = true;
+        dbPromise = null; // 事务疑似挂起，连接重建交给下一次调用
+        resolve(false);
+      }, lim);
       try {
         const tx = db.transaction(STORE, 'readwrite');
         const os = tx.objectStore(STORE);
         pairs.forEach(p => { os.put(p.v, p.k); });
-        tx.oncomplete = () => resolve(true);
-        tx.onerror = () => { if (connLost(tx.error)) dbPromise = null; resolve(false); };
-        tx.onabort = () => { if (connLost(tx.error)) dbPromise = null; resolve(false); };
-      } catch (e) { resolve(false); }
+        tx.oncomplete = () => { if (done) return; done = true; clearTimeout(t); resolve(true); };
+        tx.onerror = () => { if (done) return; done = true; clearTimeout(t); _idbFailLastErr = (tx.error && tx.error.name) || 'error'; if (connLost(tx.error)) dbPromise = null; resolve(false); };
+        tx.onabort = () => { if (done) return; done = true; clearTimeout(t); _idbFailLastErr = (tx.error && tx.error.name) || 'abort'; if (connLost(tx.error)) dbPromise = null; resolve(false); };
+      } catch (e) { if (done) return; done = true; clearTimeout(t); resolve(false); }
     })).catch(() => false);
   };
 
@@ -595,6 +636,10 @@
         k.indexOf(uidPrefix) === 0 &&
         k !== LS_DIRTY_KEY && // 脏键索引自身不回填
         k.indexOf(uidPrefix + 'music-file:') !== 0 &&
+        // #142：媒体池键（xy-home-v2:media:<hash>）不回填——几百个图片键回填进
+        // memoryCache/LS 等于把去重省下的内存又加倍吃回去；媒体层（media-pool.js）
+        // 按哈希按需 idbGet 解析令牌，池键只存 IDB
+        k.indexOf(uidPrefix + 'media:') !== 0 &&
         // v3.6.x：聊天记录不回填 localStorage——chat.js 已改为只写 IndexedDB，
         // 恢复到这里会重新占满 5MB 配额（几千条带图记录是几十 MB），且读取
         // 路径已不依赖 LS 快照（loadMsgs 直接 IDB 权威读）。
@@ -816,10 +861,37 @@
   function wrjPersist() {
     try { localStorage.setItem(WRJ_KEY, JSON.stringify(_wrj || [])); } catch (e) {}
   }
+  // v3.26.x 存储优化：标记合并落库——原实现每个小键 set 各发一个 IDB 事务写时间戳标记，
+  // 值事务之外白翻倍事务数；现积攒 150ms 用 idbSetAll 单事务批量写。语义不变：值事务在
+  // xyStore.set 里同步先发出，flush 时早已入队（值先于标记提交）；150ms 内立刻退出浏览器的
+  // 极端窗口由下方 pagehide/visibilitychange 即时冲刷兜住，且主防线本就是同步写的 LS 日志。
+  // idbSetAll 无重试骨架，返回 false 时退回逐键 idbSet（自带 3 次重试）。
+  const WRJ_MARK_FLUSH_MS = 150;
+  let _wrjMarkBuf = new Map(); // 完整标记键 -> t
+  let _wrjMarkT = null;
+  function wrjMarkFlush() {
+    if (_wrjMarkT) { clearTimeout(_wrjMarkT); _wrjMarkT = null; }
+    if (!_wrjMarkBuf.size) return;
+    const pairs = [];
+    _wrjMarkBuf.forEach(function (t, k) { pairs.push({ k: k, v: t }); });
+    _wrjMarkBuf.clear();
+    try {
+      if (window.idbSetAll) {
+        window.idbSetAll(pairs).then(function (ok) {
+          if (ok) return;
+          pairs.forEach(function (p) { try { if (window.idbSet) window.idbSet(p.k, p.v); } catch (e2) {} });
+        }).catch(function () {});
+        return;
+      }
+    } catch (e) {}
+    pairs.forEach(function (p) { try { if (window.idbSet) window.idbSet(p.k, p.v); } catch (e2) {} });
+  }
   function wrjMark(key, t) {
-    try { if (window.idbSet) window.idbSet(WRJ_MARK + key, t); } catch (e) {}
+    _wrjMarkBuf.set(WRJ_MARK + key, t);
+    if (!_wrjMarkT) _wrjMarkT = setTimeout(wrjMarkFlush, WRJ_MARK_FLUSH_MS);
   }
   function wrjUnmark(key) {
+    _wrjMarkBuf.delete(WRJ_MARK + key); // 还没落库的标记直接撤销，省一个删除事务
     try { if (window.idbDelete) window.idbDelete(WRJ_MARK + key); } catch (e) {}
   }
   function wrjRecord(key, v) {
@@ -848,6 +920,13 @@
     if (_wrj.length !== before) wrjPersist();
     wrjUnmark(key);
   }
+  // 离页即时冲刷待写标记，压缩「写完立刻退出」丢标记的窗口
+  try {
+    document.addEventListener('visibilitychange', function () {
+      try { if (document.visibilityState === 'hidden') wrjMarkFlush(); } catch (e) {}
+    });
+  } catch (e) {}
+  try { if (window.addEventListener) window.addEventListener('pagehide', wrjMarkFlush); } catch (e) {}
   // 回放：把日志里的「最近一次写入」补进 内存+LS+IDB。时间戳守卫保证只应用比
   // 已知写入更新的条目（不会覆盖本会话新写入的值）。
   function wrjReplay(entries) {
@@ -867,13 +946,30 @@
   }
   // 同步回放 LS 日志（杀进程场景下 LS 值与 LS 日志常同批回滚，此路为空时靠下方 IDB 合并兜底）
   try { wrjReplay(wrjLoad(wrjLsRaw())); } catch (e) {}
+  // FIX 2026-09-07 #229：合并失败必须重试——原实现入口即置 _wrjMerged=true，且走
+  // idbGetAllKeys（把「清单读取失败(null)」折叠成「空数组」，与「库里确实没有标记」
+  // 不可区分）：真我/荣耀/小米 Edge 等挂起内核上合并恰逢 IDB 挂起窗口时空转一次后，
+  // 整个会话永久放弃 → LS 被杀进程回滚的美化/设置/近期小数据在本会话再无第二道
+  // 自愈防线（用户视角＝刷新后部分数据丢失，多机型复发）。现改走严格三态
+  // idbListKeys：null=读取失败 → 有界重试（10s×5），合并真正走完（或确认无可修）
+  // 才置 _wrjMerged；有标记却读不到任何有效时间戳（idbGetMany 失败折叠成 undefined）
+  // 同样重试。时间戳守卫（t > _wrjTimes）保证迟到的重试合并永不覆盖本会话新写入。
+  let _wrjMergeTries = 0;
+  let _wrjMergeBusy = false;
+  function wrjMergeRetry() {
+    _wrjMergeBusy = false; // 各失败路径统一在此解锁，重试才能重新进入
+    if (_wrjMerged || _wrjMergeTries >= 5) return;
+    _wrjMergeTries++;
+    setTimeout(function () { try { wrjMergeFromIdb(); } catch (e) {} }, 10000);
+  }
   function wrjMergeFromIdb() {
-    if (_wrjMerged) return;
-    _wrjMerged = true;
-    if (!window.idbGetAllKeys || !window.idbGetMany) return;
-    window.idbGetAllKeys().then(function (keys) {
-      const marked = (keys || []).filter(function (k) { return String(k).indexOf(WRJ_MARK) === 0; });
-      if (!marked.length) return;
+    if (_wrjMerged || _wrjMergeBusy) return;
+    if (!window.idbListKeys || !window.idbGetMany) return;
+    _wrjMergeBusy = true;
+    window.idbListKeys().then(function (keys) {
+      if (!keys) { wrjMergeRetry(); return; }
+      const marked = keys.filter(function (k) { return String(k).indexOf(WRJ_MARK) === 0; });
+      if (!marked.length) { _wrjMergeBusy = false; _wrjMerged = true; return; }
       window.idbGetMany(marked).then(function (marks) {
         // 有标记且比已知写入新的键 → 读 IDB 权威值修正 内存+LS（标记幸存 = 该键最近
         // 被写过且 IDB 值事务先于标记事务提交，LS 若与其不一致就是被回滚的旧值）
@@ -882,7 +978,13 @@
           const full = String(mk).slice(WRJ_MARK.length);
           return typeof t === 'number' && t > (_wrjTimes[full] || 0);
         });
-        if (!cand.length) return;
+        if (!cand.length) {
+          const anyTs = marked.some(function (mk) { return typeof marks[mk] === 'number'; });
+          if (!anyTs) { wrjMergeRetry(); return; } // 有标记却全读不到数值＝这轮没读到，不是真没有
+          _wrjMergeBusy = false; _wrjMerged = true; // 标记都在但都不比已知写入新＝确实无可修
+          return;
+        }
+        _wrjMergeBusy = false; _wrjMerged = true;
         window.idbGetMany(cand.map(function (mk) { return String(mk).slice(WRJ_MARK.length); })).then(function (vals) {
           if (!memoryCache) memoryCache = {};
           let healed = 0;
@@ -901,7 +1003,7 @@
           }
         });
       });
-    }).catch(function () {});
+    }).catch(function () { wrjMergeRetry(); });
   }
   document.addEventListener('mochi-restore-done', wrjMergeFromIdb);
   setTimeout(wrjMergeFromIdb, 15000); // restore 整体挂起时的兜底（正常走 mochi-restore-done，_wrjMerged 防重入）
@@ -976,6 +1078,74 @@
       })();
     }
   } catch (e) {}
+
+  window.idbBigSize = function (key) {
+    // v3.26.x #139：大键尺寸只读访问（__big-idx 索引在 set/回填时记录 >200KB 值的长度）。
+    // 供字卡库去重等模块免读大值做「是否有变化」预检，避免每次会话把 100MB+ 键拉进堆。
+    try { const s = _bigIdx[key]; return typeof s === 'number' ? s : null; } catch (e) { return null; }
+  };
+
+  // ===== v3.26.x #139：LS 大键残留清扫（恢复设置保存配额） =====
+  // 现象（#139 诊断）：LS 整域 10MB 满、写探针 QuotaExceededError，设置/桌面保存失败。
+  // xyStore.set 对 >LS_BIG_LIMIT 的值会清 LS 副本，但「全量备份导入直写 LS」且发生在
+  // 上方 v3.5.92 迁移（sessionStorage 门，每浏览器会话只跑一次）之后时，存量残留直到
+  // 下次重启都没人清（fav-msgs 207KB 等 LS+IDB 双份计费）。补一个事件驱动的幂等清扫：
+  // restore 完成 / 备份导入（都会派发 mochi-restore-done）后延迟执行——
+  //   · IDB 值与 LS 值完全一致 → 纯去重，直接删 LS 副本（零数据风险）；
+  //   · IDB 缺失/落后 → 先按 retainValue 同规则以 LS 追平 IDB，写成功且 LS 未被业务
+  //     再写才删 LS（写失败本轮跳过下轮收敛；绝不先删后写）。
+  //   · IDB 值是非字符串（结构化存储）→ 不动（不是本清扫的目标形态）。
+  let _lsSweepDone = false;
+  function lsResidueSweep() {
+    if (_lsSweepDone) return;
+    _lsSweepDone = true;
+    if (!window.idbGet || !window.idbSet) return;
+    let names = [];
+    try { names = Object.keys(localStorage); } catch (e) { return; }
+    const cands = names.filter(function (k) {
+      if (typeof k !== 'string' || k.indexOf('xy-home-v2:') !== 0) return false;
+      if (isChatMsgsKey(k)) return false;                  // 聊天 LS 快照是唯一备份，绝不动
+      if (k.indexOf('music-file:') >= 0) return false;     // 音频有专属迁移路径
+      if (k === BIG_IDX_KEY || k === LS_DIRTY_KEY || k === WRJ_KEY || k.indexOf('__wr-j:') === 0) return false;
+      if (k === 'xy-home-v2:__auto-backup-snapshot') return false;
+      let v = null;
+      try { v = localStorage.getItem(k); } catch (e) { return false; }
+      return typeof v === 'string' && v.length > LS_BIG_LIMIT;
+    });
+    let i = 0;
+    (function step() {
+      if (i >= cands.length) return;
+      const k = cands[i++];
+      let lsVal = null;
+      try { lsVal = localStorage.getItem(k); } catch (e) {}
+      if (typeof lsVal !== 'string' || lsVal.length <= LS_BIG_LIMIT) { setTimeout(step, 0); return; }
+      window.idbGet(k).then(function (idbVal) {
+        const next = function () { setTimeout(step, 0); };
+        if (idbVal && typeof idbVal !== 'string') { next(); return; }
+        if (typeof idbVal === 'string' && idbVal === lsVal) {
+          // 纯去重：IDB 已有同值，LS 副本是双倍计费残留；删前复读防业务刚写入新值
+          try { if (localStorage.getItem(k) === lsVal) localStorage.removeItem(k); } catch (e) {}
+          next(); return;
+        }
+        // IDB 缺失/落后 → 以 LS 为最新追平 IDB，写成功且 LS 未变才删（绝不先删后写）
+        window.idbSet(k, lsVal).then(function (ok) {
+          if (ok) {
+            let cur = null;
+            try { cur = localStorage.getItem(k); } catch (e) {}
+            if (cur === lsVal) {
+              if (!memoryCache) memoryCache = {};
+              if (!(k in memoryCache)) memoryCache[k] = lsVal;
+              try { localStorage.removeItem(k); } catch (e) {}
+            }
+          }
+          next();
+        }).catch(next);
+      }).catch(function () { setTimeout(step, 0); });
+    })();
+  }
+  document.addEventListener('mochi-restore-done', function () { setTimeout(lsResidueSweep, 20000); });
+  setTimeout(lsResidueSweep, 45000); // restore 挂起/事件丢失兜底（_lsSweepDone 防重入）
+  window.idbLsResidueSweep = lsResidueSweep;
 
   // v3.16.x：跨上下文同步——get 改 memoryCache 优先后，另一上下文（PWA + 浏览器标签双开、
   // 多窗口）写入 localStorage 的新值会被本侧 memoryCache 旧值遮蔽。storage 事件（仅跨上下文

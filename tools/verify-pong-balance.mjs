@@ -1,4 +1,5 @@
 // ===== 专项回归：双人 Pong 难度平衡（pong.js v3.12.x 锁定式进攻误差重做） =====
+// verify-suite:timeout=900000
 // 用户反馈：「双人pong还是难度太高」「都难，我赢不了」。
 // 根因：AI 的 predictErr/missRate 原实现是每帧重掷的噪声，挡板连续追踪时互相平均掉，
 //       配置表里的失误率形同虚设——低难档 AI 实际几乎不失误。v3.12.x 改为每次球飞向 TA
@@ -79,7 +80,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
-const cdpPort = 9700 + Math.floor(Math.random() * 200);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 200));
 const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-pongbal-' + Date.now()), '--remote-debugging-port=' + cdpPort, 'about:blank'], { stdio: 'ignore' });
 
 let ws = null, msgId = 0; const pend = new Map();

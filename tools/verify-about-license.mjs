@@ -48,7 +48,7 @@ const baseUrl = 'http://127.0.0.1:' + server.address().port;
 const candidates = [process.env.CHROME_PATH, 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe', 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'].filter(Boolean);
 const chromePath = candidates.find((p) => { try { return statSync(p).isFile(); } catch (e) { return false; } });
 if (!chromePath) { console.error('找不到 Chrome/Edge'); process.exit(1); }
-const cdpPort = 9950 + Math.floor(Math.random() * 49);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9950 + Math.floor(Math.random() * 49));
 const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--user-data-dir=' + join(tmpdir(), 'mochi-ab-' + Date.now()), '--remote-debugging-port=' + cdpPort, 'about:blank'], { stdio: 'ignore' });
 
 let ws = null, msgId = 0;

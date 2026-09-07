@@ -78,7 +78,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9800 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9800 + Math.floor(Math.random() * 100));
 const tmpProfile = join(process.env.TEMP || '/tmp', 'mochi-voicerec-' + Date.now());
 // --use-fake-device-for-media-stream：内置假麦克风（正弦音）；--use-fake-ui-for-media-stream：自动授予权限
 const chrome = spawn(chromePath, [

@@ -64,7 +64,7 @@ writeFileSync(join(tmpDir, 'sw.js'), swBuilt);
 writeFileSync(join(tmpDir, 'manifest.json'), readFileSync(join(root, 'manifest.json'), 'utf8'));
 for (const f of ['icon-192.png', 'icon-512.png']) { try { writeFileSync(join(tmpDir, f), readFileSync(join(root, f))); } catch (e) {} }
 const baseUrl = 'file:///' + normalize(tmpDir).split(sep).join('/') + '/index.html';
-const cdpPort = 9700 + Math.floor(Math.random() * 200);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 200));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--disable-audio-output', '--disable-component-extensions-with-background-pages',

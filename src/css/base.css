@@ -106,6 +106,8 @@ html { margin:0; padding:0; }
 /* v3.8.y：原作/部署信息（署名下方）——小灰字低调展示使用网站/GitHub 库 */
 .splash-source { margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); text-align:center; width:100%; }
 .splash-source-line { font-size:9px; color:var(--hint-ink); line-height:1.8; letter-spacing:0; white-space:nowrap; }
+/* v3.26.x：置顶澄清行可换行——nowrap 仅供单行网址/署名，长句澄清不换行会超出手机屏幕 */
+.splash-source-line.splash-clarify { white-space:normal; padding:0 10px; }
 .splash-source-url { color:var(--ink); font-weight:600; }
 /* v3.8.y：底部统一卡片框——版本/加载/提示/按钮装进一个白卡片，与顶部品牌卡片呼应 */
 .splash-footcard {
@@ -253,6 +255,9 @@ html { margin:0; padding:0; }
   background:var(--sp-soft); color:var(--sp-ink);
   font-size:10px; font-weight:800;
 }
+/* 高亮条目：关键提醒用显眼橙色加粗标出（如「基础疑问可直接问 AI」）；
+   双选择器压过 .splash-notice-list p / .splash-summary p 的软墨色 */
+.splash-notice-list .splash-hl, .splash-summary .splash-hl { color:#e8590c; font-weight:800; }
 /* 子列表项：黑色 · 前缀，与编号条目文字对齐 */
 .splash-bullet { position:relative; padding-left:23px; margin-bottom:6px; line-height:1.7; }
 .splash-bullet::before {
@@ -464,14 +469,21 @@ html.tablet.ios-pwa-standalone .phone { height:min(100vh, var(--mochi-ios-h, 100
    根因是缺顶部安全区补偿，本规则补上后不再复发。 */
 .ios-pwa-standalone.ios-fs-active .phone,
 html.tablet.ios-pwa-standalone.ios-fs-active .phone {
-  height:100vh;
+  /* v3.26.x #148：高度改用 --mochi-ios-h（mobile-adapt syncVvFit 写入的 vv 实测可视高，
+     未写入时回落 100vh）——iOS 26.x 独立应用 100vh = 整块物理屏（如 874）而可视高只有
+     812，100vh 会把 .phone 底部 tabbar 裁出屏幕外（实测 底部空隙=-62）。padding-top
+     语义不变：--mochi-safe-top 已改为 env() 探针实测（#148），「系统已避让」形态返回
+     0，不再与系统避让叠加成双倍顶部空白。 */
+  height:var(--mochi-ios-h, 100vh);
   padding-top:max(var(--mochi-safe-top, env(safe-area-inset-top, 0px)), 12px);
   padding-bottom:0;
 }
-/* v3.28.x #114：同模式下 html/body 钉到物理屏高，避免 .phone(100vh) 高于 body(100dvh)
-   造成页面纵向可滚（v3.27.x 记录过"body 可滚"的副作用） */
+/* v3.28.x #114：同模式下 html/body 钉到与 .phone 同高（#148 改 --mochi-ios-h，理由同上），
+   避免 .phone 高于 body(100dvh) 造成页面纵向可滚（v3.27.x 记录过"body 可滚"的副作用） */
 html.ios-pwa-standalone.ios-fs-active,
-html.ios-pwa-standalone.ios-fs-active body { height:100vh; min-height:100vh; }
+html.ios-pwa-standalone.ios-fs-active body { height:var(--mochi-ios-h, 100vh); min-height:0; overflow:hidden;
+  /* v3.26.x #185：锁文档滚动——iPad 独立应用全屏态文档可滚时 iOS 橡皮筋把整页
+     来回拽（自愈 pin 对打=「滑动位置会飞、一弹一弹」）。页面内滚动不受影响 */ }
 /* v3.7.x：iPhone 12 mini 实测反馈「桌面底部导航栏下面有灰色图形」——iOS 部分版本
    standalone + black-translucent 下 100vh 不含底部 home indicator 安全区（约 34px），
    .phone 底部外露出 html/body 灰底（--page-bg #e9e9e9）形成灰色带；且与顶部
@@ -622,6 +634,15 @@ html.ios-native-fs .phone .page.full .stats-top-name { padding-top: 10px; }
    的 padding-top 统一承担（.phone 整体下移到系统状态栏下方），这里只留 14px 常态
    留白，不再重复加 env/safe-area——否则与 .phone 顶部内边距叠加成双倍白带。 */
 html.ios-fs-active .phone .statusbar { padding-top:14px; }
+/* FIX 2026-09-05 #189：iPad（tablet）主屏幕全屏需要可见效果——#111 为修 iPhone16
+   「全屏后桌面顶部一行不见了、被遮挡」改为全屏态保留模拟状态栏，但 iPad 无灵动岛、
+   系统状态栏独立成条、网页本来就盖不上去，保留后【全屏模式】开关在 iPad 上毫无
+   视觉变化（#144 修好判定后用户仍报「没有生效」）。平板恢复 v3.6.x 原设计：全屏态
+   隐藏模拟状态栏，内容由下方 html.tablet.ios-fs-active .phone 的 padding-top
+   max(env,12px) 垫到系统状态栏下方；手机侧 #111 行为不变。
+   注意：#111 哨兵（absent 检查无作用域的整类隐藏选择器+display:none 组合）
+   只拦无作用域的整类隐藏，本条按 tablet+standalone 限定作用域，属有意例外，勿改回。 */
+html.tablet.ios-pwa-standalone.ios-fs-active .phone .statusbar { display:none; }
 
 /* v3.6.x→v3.28.x：iOS 独立应用「全屏模式」（ios-fs-active 类，由 fullscreen.js 控制）——
    iOS 无 Fullscreen API、系统状态栏永远无法隐藏，应用内模拟状态栏（Mochi/时间/电量那行）
@@ -651,7 +672,10 @@ html.ios-fs-active .phone .statusbar { padding-top:14px; }
    查询与桌面外壳样式。 */
 html.tablet body { padding:0; }
 html.tablet .phone {
-  width:min(640px, 100vw); max-width:none; flex-shrink:0;
+  /* v3.26.x #186：平板默认观感改全宽铺满（用户决策 2026-09-05，替代 v3.7.x 的
+     640/820 限宽居中——多台 iPad 用户反馈「四边不贴合」；横屏同改见下方媒体查询。
+     内容阅读宽度由内部组件自行约束（横屏气泡 460px 封顶规则保留） */
+  width:100vw; max-width:none; flex-shrink:0;
   height:100vh; height:100svh; height:100dvh;
   border-radius:0; box-shadow:none;
   padding:0 18px 18px;
@@ -663,6 +687,9 @@ html.tablet .statusbar {
 }
 /* 平板真全屏（Fullscreen API / display_override）：仍是整屏铺满（与手机端一致） */
 html.tablet.fs-active .phone, html.tablet.fs-css-active .phone { width:100vw; max-width:none; }
+/* v3.26.x #185：平板 iOS 全屏模式（ios-fs-active）全宽铺满——原 640px 限宽居中在
+   全屏下左右各露 ~90px 底色（用户报「全屏模式有白边」）；浏览器/非全屏保持限宽居中 */
+html.tablet.ios-fs-active .phone { width:100vw; max-width:none; }
 @media (display-mode: fullscreen) { html.tablet .phone { width:100vw; max-width:none; } }
 /* 平板 iOS「全屏模式」（隐藏应用内模拟状态栏）：顶部安全区兜底（同手机端规则） */
 html.tablet.ios-fs-active .phone { padding-top:max(env(safe-area-inset-top, 0px), 12px); }
@@ -705,7 +732,7 @@ html.tablet body, html.tablet .phone, html.tablet img { -webkit-touch-callout:no
    命中，两侧留白 102-130px，观感与原生 iPad 应用限宽居中一致。
    iPad Air/Pro 横屏 1180-1366px 同命中，两侧留白 180-273px，不过窄。 */
 @media (orientation: landscape) and (min-width: 1024px) {
-  html.tablet .phone { width:min(820px, 100vw); }
+  html.tablet .phone { width:100vw; } /* #186：横屏同样全宽铺满 */
   /* 消息气泡封顶 460px：820px 下 70%=574px 过宽难读，封顶后接近手机阅读宽度 */
   html.tablet .msg:not(.msg-ask):not(.msg-center) { max-width:min(70%, 460px); }
   /* 弹窗稍宽（横屏空间充裕，360px 比 320px 更舒展） */
@@ -792,6 +819,20 @@ input.ce-ghost, textarea.ce-ghost {
   display:flex; align-items:center; justify-content:space-between;
   padding:4px 4px 12px; font-size:13px; font-weight:600; z-index:2;
 }
+/* v3.26.x #199：浏览器覆盖形态（雨见/Via 等沉浸式安卓壳：页面顶到系统状态栏下，
+   screen==inner、standalone=false）——mobile-adapt.js syncVvFit 实测 env 写
+   --mochi-safe-top 并挂 mochi-cover-top 类；此处以更高特异性夺回被本文件上方
+   .statusbar{padding:4px…}（同特异性后加载）压死的顶部避让（#114 同根因，
+   该形态无 .phone padding 兜底链，必须由状态栏自身抬升）。iOS standalone 不挂
+   类、规则不生效，既有避让链（.phone padding-top / ios-fs-active）不受影响。 */
+html.mochi-cover-top .phone .statusbar {
+  padding-top:max(calc(14px + var(--mochi-safe-top, 0px)), 14px);
+}
+/* v3.26.x #199：Gecko 系（Firefox/雨见等）滚动锚定会在删除/新增消息改动上方
+   内容时自行调整 chat-body 的 scrollTop，与 chat.js #162 贴底钉住逻辑对打
+   （荣耀50se+雨见：删消息/对方回消息屏幕往上移）——聊天页滚动权已完全由
+   JS 显式管理，关掉浏览器自动锚定（跨内核安全：Chromium 同属性可解析）。 */
+.chat-body { overflow-anchor: none; }
 .statusbar .brand { font-weight:800; letter-spacing:.5px; }
 .statusbar .sb-right { display:flex; align-items:center; gap:8px; }
 .statusbar .icons { display:flex; gap:6px; align-items:center; }
@@ -1031,3 +1072,20 @@ input.ce-ghost, textarea.ce-ghost {
 .sfx-preset.on { background:var(--ink); color:#fff; border-color:var(--ink); }
 /* 卡片底部操作行：无自定义只显示上传，有自定义显示试听/清除 */
 .sfx-tools { display:flex; gap:8px; flex-wrap:wrap; padding:0 16px 14px; }
+
+/* ===== v3.27.x #218 互动频率引导提示条 ===== */
+/* TA 主动消息/连发多条/互动邀请随机触发时，提醒用户可自行调低或关闭（入口：设置 → 回复设置）；
+   纯提醒、不改任何默认值。定位/配色对齐 #cc-toast（bottom 120px + safe-area、z-index 同层），
+   元素由 reply-settings.js 按需创建 */
+#reply-guide-hint {
+  position:fixed; left:50%; bottom:calc(120px + var(--mochi-safe-bottom, env(safe-area-inset-bottom, 0px))); transform:translate(-50%, 10px);
+  background:rgba(17,17,17,.92); color:#fff; font-size:12.5px; line-height:1.5;
+  padding:10px 14px; border-radius:14px; z-index:99;
+  opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+  max-width:82vw; display:flex; align-items:center; gap:10px; text-align:left;
+  box-shadow:0 4px 16px rgba(0,0,0,.18);
+}
+#reply-guide-hint.show { opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
+#reply-guide-hint .rgh-go { flex:none; font-weight:700; color:#f5c452; white-space:nowrap; }
+/* 回复设置页顶部「这些都是概率、可自行调」说明行（template.html 静态） */
+.reply-guide-note { padding:10px 14px 2px; }

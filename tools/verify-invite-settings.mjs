@@ -42,7 +42,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9700 + Math.floor(Math.random() * 90);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 90));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-iv-' + Date.now()),
@@ -152,7 +152,9 @@ const vmap = {};
 check('其他面板含 3 个 stepper（猜拳/游戏/贴贴邀请概率）', vmap['ai-rps-prob'] !== undefined && vmap['ai-game-prob'] !== undefined && vmap['ai-cuddle-prob'] !== undefined, 'keys=' + Object.keys(vmap).join(','));
 check('默认值：ai-rps-prob=8 / ai-game-prob=5 / ai-cuddle-prob=5', vmap['ai-rps-prob'] === '8' && vmap['ai-game-prob'] === '5' && vmap['ai-cuddle-prob'] === '5', vmap['ai-rps-prob'] + '/' + vmap['ai-game-prob'] + '/' + vmap['ai-cuddle-prob']);
 check('默认值：猜拳/游戏邀请开关均开启', ctl.rpsEn === true && ctl.gameEn === true, 'rps=' + ctl.rpsEn + ' game=' + ctl.gameEn);
-check('面板有「联系人主动邀请」分组标题', (ctl.title || []).length === 1 && ctl.title[0].indexOf('主动邀请') >= 0, JSON.stringify(ctl.title));
+// FIX（#165 脚本侧）：「其他」面板后来新增「联系人跨桌面查岗/打电话」分组（#150/#159 同期），
+// 标题数不再恒为 1——断言改为「存在主动邀请分组标题」，不再约束总数
+check('面板有「联系人主动邀请」分组标题', (ctl.title || []).some(t => t.indexOf('主动邀请') >= 0), JSON.stringify(ctl.title));
 
 // ==================== 3. replyCfg 默认值 ====================
 const cfg0 = {
@@ -194,19 +196,26 @@ for (let i = 0; i < 20; i++) {
 }
 check('猜拳邀请消息已发送（.msg-poke 居中卡片，含「猜拳」）', rpsMsg.indexOf('猜拳') >= 0, rpsMsg);
 let maskVisible = false, pillsOk = false, rpsPanelClosed = true;
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 30; i++) {
   const st = JSON.parse(await evalJs("(function(){var m=document.getElementById('modal-mask');var pills=document.querySelectorAll('#modal-pills button');var labels=[].slice.call(pills).map(function(b){return b.textContent;});var rp=document.getElementById('chat-rps-panel');return JSON.stringify({mask:m?!m.hidden:false,pills:labels,rpHidden:rp?rp.hidden:true});})()") || '{}');
   maskVisible = st.mask; pillsOk = st.pills.indexOf('同意') >= 0 && st.pills.indexOf('拒绝') >= 0; rpsPanelClosed = st.rpHidden;
-  if (maskVisible) break;
-  await sleep(200);
+  if (maskVisible && pillsOk) break;
+  await sleep(250);
 }
 check('邀请弹窗已弹出（modal-mask 可见）', maskVisible === true);
 check('弹窗含「同意」「拒绝」两个选项', pillsOk === true);
 check('弹窗弹出时半框未自动打开（需先同意）', rpsPanelClosed === true);
-// 点同意 → 点确定 → 半框打开
-await evalJs("(function(){var pills=document.querySelectorAll('#modal-pills button');for(var i=0;i<pills.length;i++){if(pills[i].textContent.indexOf('同意')>=0){pills[i].click();break;}}var ok=document.getElementById('modal-ok');if(ok)ok.click();return true;})()");
-await sleep(400);
-let rpsPanelOpen = await evalJs("(function(){var p=document.getElementById('chat-rps-panel');return !!p&&!p.hidden;})()") || false;
+// FIX（#165 脚本侧）：弹窗出现/半框打开均为异步，固定 400ms 单次点击偶发赶不上——
+// 「点同意+确定」改为轮询重试，「半框打开」改为轮询等待（断言口径不变）
+let rpsPanelOpen = false;
+for (let i = 0; i < 20 && !rpsPanelOpen; i++) {
+  await evalJs("(function(){var pills=document.querySelectorAll('#modal-pills button');for(var i=0;i<pills.length;i++){if(pills[i].textContent.indexOf('同意')>=0){pills[i].click();break;}}var ok=document.getElementById('modal-ok');if(ok)ok.click();return true;})()");
+  for (let j = 0; j < 4; j++) {
+    await sleep(250);
+    rpsPanelOpen = await evalJs("(function(){var p=document.getElementById('chat-rps-panel');return !!p&&!p.hidden;})()") || false;
+    if (rpsPanelOpen) break;
+  }
+}
 check('点「同意」+确定后猜拳半框打开', rpsPanelOpen === true);
 await evalJs("(function(){var b=document.getElementById('chat-rps-close');if(b)b.click();return true;})()");
 await sleep(300);

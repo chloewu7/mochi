@@ -2,10 +2,10 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual">
-<title>Mochi 字卡传讯</title>
-<meta name="description" content="情侣专属的摸鱼字卡聊天模拟器">
-<meta name="theme-color" content="#111111">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-visual">
+<title>Mochi 字卡传讯（完全免费·禁止倒卖）</title>
+<meta name="description" content="情侣专属的摸鱼字卡聊天模拟器。本站完全免费，任何收费均为倒卖诈骗；唯一作者：小红书@言序（1842523578）。如果你是花钱买来的链接：你被骗了，请拒付退款并举报卖家。">
+<meta name="theme-color" content="#e9e9e9">
 <link rel="manifest" href="./manifest.json">
 <!-- v3.5.158：站点图标用带 mochi 字母的 icon-512——Chrome 安卓通知左侧小图标取自站点图标 -->
 <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
@@ -36,7 +36,11 @@
         </div>
         <div class="splash-title">mochi 摸鱼字卡</div>
         <!-- v3.8.y：署名（小红书）移到顶部，紧跟标题下方 -->
-        <div class="splash-brand">小红书@言序（1842523578）</div>
+        <div class="splash-brand">小红书@言序（1842523578） · 抖音@言序（58334080131）</div>
+        <!-- v3.26.x：置顶澄清——很多人误会本站是 milk 二改/名字有关，特此置顶说明 -->
+        <div class="splash-source">
+          <div class="splash-source-line splash-clarify"><strong>「Mochi」这个名字与 milk 字卡没有关系，就是想取个简单的名字取的。</strong>本站不是 milk字卡代码的二改版本，是从零开始独立编写的字卡传讯二创作品。</div>
+        </div>
         <!-- v3.8.y：原作/部署信息——本人原作本人部署，使用网站 + GitHub 库（每条单行完整显示） -->
         <div class="splash-source">
           <div class="splash-source-line">本人原作，本人部署。</div>
@@ -50,9 +54,14 @@
            全部说明直接展示在开屏上，点底部【点击进入】即进入（点击即视为已阅读知晓），无二次确认层 -->
       <div class="splash-notice" id="splash-notice">
         <!-- v3.27.x：防骗置顶声明——最顶部固定展示，防收费诈骗；静态 DOM，在线 notice.json 覆盖只改公告列表，不影响此处 -->
-        <div class="splash-alert">
+        <div class="splash-alert" data-anti-scam="1">
           <div class="splash-alert-t">防骗提醒</div>
-          <p><strong>Mochi字卡网站完全免费。作者只有小红书这一个账号：小红书@言序（1842523578）。</strong>如有出现任何收费情况，均为诈骗，注意防止被骗。</p>
+          <p><strong>Mochi字卡网站完全免费。作者只有两个账号：小红书@言序（1842523578）和抖音@言序（58334080131）。</strong>作者不玩抖音、不回消息，是看到有人想花钱求网站才开的号，仅用于发布本站链接。本站不收取任何费用，如有出现任何收费情况，均为诈骗，注意防止被骗。</p>
+        </div>
+        <!-- v3.26.x：署名·禁倒卖置顶声明——二传必须标注原作者署名，严禁收费倒卖本站链接；静态 DOM，在线 notice.json 覆盖只改公告列表，不影响此处 -->
+        <div class="splash-alert" data-anti-scam="2">
+          <div class="splash-alert-t">转载署名 · 严禁倒卖</div>
+          <p><strong>二传、分享本站链接必须标注作者署名：小红书 @言序（1842523578），禁止删除或修改。</strong>严禁冒为自己制作、删除篡改署名，或以任何形式收费倒卖本站链接、安装包——本站完全免费，收费即诈骗。如果你是花钱买来的链接：你被骗了，请拒付退款并举报卖家。</p>
         </div>
         <div class="splash-notice-title">Mochi字卡 · 开屏说明</div>
         <div class="splash-notice-sub">（请认真阅读）</div>
@@ -64,10 +73,12 @@
             <p>不提供免费客服、教学、一对一指导。使用问题请先看开屏说明/代码，常见问题可问互助群。</p>
             <p>反馈 bug 请描述清楚，我会看到后处理；催单不回，不一定有时间。</p>
             <p>本站完全免费，开放二传二改，但禁止商用、禁止以盈利为目的。</p>
-            <p>报修 / 反馈请按【手机型号 + 浏览器 + 具体现象】提交，缺一不回；尽量附上设置里的【复制诊断信息】；基础疑问可直接问 AI，比我回复快。</p>
+            <p>报修 / 反馈请按【手机型号 + 浏览器 + 具体现象】提交，缺一不回；尽量附上设置里的【复制诊断信息】。</p>
+            <p class="splash-hl">基础疑问可直接问 AI，比我回复快。</p>
             <p>系统或浏览器版本不同，适配表现可能不同，属正常现象。</p>
             <p>建议使用 Chrome、Edge 等主流浏览器，尽量不用手机自带默认浏览器（会有限制），用主流浏览器出现的兼容问题会少一些。</p>
-            <p>数据丢失属浏览器正常概率，请定期备份：本机不保留任何自动副本，你下载并保存好的导出文件就是唯一备份（别删、别只留在下载列表里）。</p>
+            <p class="splash-hl">数据丢失属浏览器正常概率，请定期备份：本机不保留任何自动副本，你下载并保存好的导出文件就是唯一备份（别删、别只留在下载列表里）。</p>
+            <p class="splash-hl">TA 的主动消息、连发多条、互动邀请等都是按概率随机触发的——嫌频繁可在 设置 → 回复设置 调低概率（0 = 不触发）或直接关闭开关。</p>
             <p>完整说明在各章节内，可点上方目录跳转查看。</p>
           </div>
           <div class="splash-sec-wrap splash-sec-collapsible is-collapsed">
@@ -91,14 +102,34 @@
             </div>
           </div>
           <div class="splash-sec-wrap">
+            <p class="splash-sec">【互助群公告】</p>
+            <p class="splash-item">📌 网站链接在置顶图片里，使用说明见网站开屏（必看）。</p>
+            <p class="splash-item">本网站是群主个人自费、利用业余时间开发和维护的免费项目，代码开源，大家可以自由使用和二次修改。</p>
+            <p class="splash-item">二传（把本站链接分享给他人使用）需标注作者署名：小红书 @言序（1842523578），禁止删除或修改。</p>
+            <p class="splash-item">Mochi字卡不是小手机，是字卡网站，需要导入字卡使用。公用字卡和专属字卡可以导入 milk 字卡库的 json。</p>
+            <p class="splash-item">系统设置和系统预设字卡默认全开，可以选择关闭。</p>
+            <p class="splash-sub">请理解几点：</p>
+            <p class="splash-bullet">这是免费分享，不是商业服务——群主不提供免费客服、教学、一对一指导。</p>
+            <p class="splash-bullet">本群是互助群，问题大家一起帮忙解答，互相理解。群主平时较忙，不一定回答所有问题。</p>
+            <p class="splash-bullet">使用问题：先看网站里的使用说明 → 常见问题问互助群，群友都很热心。</p>
+            <p class="splash-bullet">管理员们也是自荐帮忙管理群的志愿者，不是客服，别只艾特管理，管理不一定在线。非常基础的问题可以先自己摸索一下，或在群里搜索聊天记录找答案，实在不懂再问。</p>
+            <p class="splash-bullet">关于 bug：网站本身没问题的话，一般就是你手机兼容的原因。</p>
+            <p class="splash-sub">个人手机兼容 bug 反馈：</p>
+            <p class="splash-bullet">报修格式：【手机型号 + 浏览器 + 问题 + 诊断信息文件】，艾特群主。</p>
+            <p class="splash-bullet">每个型号可能出现的问题都不一样，不报清楚修不了。</p>
+            <p class="splash-bullet">群主看到会处理，但不承诺修复时间——有空就修，忙就晚点。</p>
+            <p class="splash-bullet">群主没有你的设备型号无法验证是否修复，修完需要自己验证。</p>
+            <p class="splash-sub">禁公屏梦：</p>
+            <p class="splash-bullet">聊天和截图禁止暴露 mj 名字，群里人多怕创到人。</p>
+          </div>
+          <div class="splash-sec-wrap">
             <p class="splash-sec">【一、当前状态】</p>
             <p class="splash-item">8.12开搓，8.15~8.29内测，谢谢参与内测的各位。</p>
             <p class="splash-item">Mochi字卡 8.29 已完全公开，可二传二改。</p>
             <p class="splash-item">网站与我更新修复问题是同步的：边修边部署，修一天部署一天；开屏有最新部署时间。</p>
             <p class="splash-item">如果浏览器还没进入新版，可以关掉浏览器再打开，多试几次流量刷新，或者过一段时间再打开。</p>
             <p class="splash-sub">【关于反馈与建议】</p>
-            <p class="splash-item">有问题可以在评论区或互助群艾特我，但我精力有限，不一定全部回复也不一定及时回复。</p>
-            <p class="splash-bullet">另外小红书可能会吞消息，如果没收到回复，可以重复艾特我。</p>
+            <p class="splash-item">有问题可以在互助群艾特我，但我精力有限，不一定全部回复也不一定及时回复。</p>
             <p class="splash-item">网站首先是做给我自己用的，不需要的细节不做，所以不一定采纳建议。</p>
             <p class="splash-bullet">个人精力有限，许愿的功能不一定做，按我自己的节奏和需求调整。</p>
             <p class="splash-item">做这个网站花了我非常多的时间、精力和心血，自己做过网站的都能明白。</p>
@@ -113,14 +144,14 @@
             <p class="splash-bullet">我自己的设备一直在用，发现bug会自己修，但我没有其他人的手机，无法验证其他设备上的问题；</p>
             <p class="splash-bullet">所以光说"用不了""点不动""好多bug"是不够的——没有【手机型号 + 浏览器 + 具体现象】，我这边真的没法查。</p>
             <p class="splash-sub">Bug 报修格式：</p>
-            <p class="splash-item">请按【手机型号 + 浏览器 + 具体现象】提交，缺一不回。</p>
+            <p class="splash-item splash-hl">请按【手机型号 + 浏览器 + 具体现象】提交，缺一不回。</p>
             <p class="splash-bullet">例：小米14 / 自带浏览器 / 点击字卡没反应</p>
             <p class="splash-bullet">补充方式：设置 → 复制诊断信息，把自动生成的本机诊断文本（含版本号）一并贴上，能更快定位。</p>
             <p class="splash-sub">问「为什么会出现这个问题」这类基础疑问：</p>
-            <p class="splash-item">建议直接问 AI，比我回复快。</p>
+            <p class="splash-item splash-hl">建议直接问 AI，比我回复快。</p>
             <p class="splash-item">反馈后不需要等我回复：消息太多，修完会直接部署，可以晚些刷新到新版再试。反馈的每个问题都修了，但能否修好只能用自己的设备验证，我没有其他设备，无法验证修复程度。</p>
             <p class="splash-item">如果有设备问题bug一直修不好，我建议可以拿我的代码自行部署和修缮，有自己的手机自己验证bug是否修复会方便很多。</p>
-            <p class="splash-item">8.29公开已开群友互助群，但我不一定有时间看，只是群友互助群，有问题直接评论或群里艾特，个人精力有限也不一定及时回复。</p>
+            <p class="splash-item">8.29公开已开群友互助群，但我不一定有时间看，只是群友互助群，有问题群里艾特即可，个人精力有限也不一定及时回复。</p>
             <p class="splash-item">关于数据丢失：有可能有bug，也有可能是浏览器触发丢失。如果不是高频率丢失，就是正常情况（浏览器自身正常概率丢失数据），需要定期备份。建议提示有新版本需要刷新时先备份数据。注意：本机不保留任何自动备份副本（v3.29 起该机制已下线，历史遗留副本会在启动时自动清理释放空间），你下载并保存好的导出文件就是唯一备份——请把它存到不会被浏览器清理的地方，别只留在下载列表里。</p>
           </div>
           <div class="splash-sec-wrap">
@@ -129,7 +160,7 @@
             <p class="splash-item">手机浏览器打开网站使用，和把网站安装快捷方式到手机桌面使用，是两种使用方式。</p>
             <p class="splash-item">浏览器限制有可能会自行隔离数据，导致两边数据不互通——之前使用的数据，只能自己手动导入。</p>
             <p class="splash-sub">重要提醒：</p>
-            <p class="splash-item">浏览器打开网站 和 安装到桌面的快捷方式，不能同时打开使用，会导致两边数据不统一。</p>
+            <p class="splash-item splash-hl">浏览器打开网站 和 安装到桌面的快捷方式，不能同时打开使用，会导致两边数据不统一。</p>
           </div>
           <div class="splash-sec-wrap">
             <p class="splash-sec">【四、关于全屏模式失效】</p>
@@ -167,6 +198,7 @@
             <p class="splash-sub">关于星言字卡</p>
             <p class="splash-item">星言字卡为同一作者的另一部独立作品，其本体禁止二传二改。</p>
             <p class="splash-sub">灵感来源</p>
+            <p class="splash-item">本站不是 milk字卡代码的二改版本，是从零开始独立编写的字卡传讯二创作品；「Mochi」这个名字与 milk 字卡没有关系，就是想取个简单的名字取的。</p>
             <p class="splash-item">本站并非复刻他人网站，代码均从零编写。除随机回复的基础逻辑、基础框架外（灵感来源为 milk 字卡 · 小红书 @milk（2777299956）），以下功能为借鉴：</p>
             <p class="splash-bullet">帮我决定、多人决定功能：借鉴自小红书 @FelixFelicis（9416318007）</p>
             <p class="splash-bullet">公用字卡+专享字卡模式：借鉴自小红书 @默玉（8012400317）</p>
@@ -216,7 +248,8 @@
       <!-- v3.8.y：必须把公告滑到底才能进入——未到底时按钮置灰不可点，下方提示滑动 -->
       <div class="splash-enter-hint" id="splash-enter-hint" hidden>请滑到底部后进入</div>
       <div class="splash-btns">
-        <div class="splash-enter" id="splash-enter" hidden>点击进入</div>
+        <!-- v3.26.x：按钮文案「点击进入」→「我已阅读并知晓」——把进入动作显性化为已读确认（公告没人看的低成本对策第一步；门控/样式/脚本定位均未动） -->
+        <div class="splash-enter" id="splash-enter" hidden>我已阅读并知晓</div>
       </div>
       <!-- v3.26.x：数据加载超 12 秒仍未就绪时的逃生口（clock.js 控制显隐，默认 hidden）；
            点此进入会提示「数据仍在加载，部分内容可能暂时看不见」，避免静默放行误入空数据 -->
@@ -532,6 +565,17 @@
         <div class="ci"><div class="n">专属字卡</div><div class="m">只有当前桌面绑定的联系人才能使用</div></div>
         <div class="t" id="cc-list-count">0</div>
       </div>
+      <!-- v3.32.x：其他互动功能字卡同公用/专属拆双入口（存储本就双作用域，取池合并） -->
+      <div class="chat-item glass" id="li-fun-cards-public">
+        <div class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.4l6.1-.9z"/></svg></div>
+        <div class="ci"><div class="n">其他互动功能字卡·公用</div><div class="m">添加的功能字卡 · 每个桌面的联系人都能使用</div></div>
+        <div class="t" id="cc-fun-pub-count">0</div>
+      </div>
+      <div class="chat-item glass" id="li-fun-cards-mine">
+        <div class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.4l6.1-.9z"/></svg></div>
+        <div class="ci"><div class="n">其他互动功能字卡·专属</div><div class="m">添加的功能字卡 · 只有当前桌面的联系人能使用</div></div>
+        <div class="t" id="cc-fun-count">0</div>
+      </div>
       <div class="chat-item glass" id="li-checkin-cards-mine">
         <div class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/><path d="M12 3a9 9 0 000 18"/></svg></div>
         <div class="ci"><div class="n">寻踪日常·我的添加</div><div class="m">你添加的地点/做的事/说的话</div></div>
@@ -571,6 +615,15 @@
         <div class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10.5v3M5.5 12h3"/><path d="M15.5 11h.01M18.5 13h.01"/></svg></div>
         <div class="ci"><div class="n">TA的邀请·我的添加</div><div class="m">你添加的邀请话术</div></div>
         <div class="t" id="cc-ta-invite-count-mine">0</div>
+      </div>
+      <!-- v3.34.x：自定义字卡全量导入导出——覆盖下方全部自定义库（聊天字卡双作用域/功能卡/寻踪/情话/TA六类） -->
+      <div class="chat-item glass" id="li-cc-full-export">
+        <div class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg></div>
+        <div class="ci"><div class="n">自定义字卡·全量导出</div><div class="m">公用/专属字卡·功能卡·寻踪·情话·TA互动 一份 json 备份</div></div>
+      </div>
+      <div class="chat-item glass" id="li-cc-full-import">
+        <div class="av"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M4 19h16"/></svg></div>
+        <div class="ci"><div class="n">自定义字卡·全量导入</div><div class="m">从全量导出 json 恢复 · 支持追加合并/整包替换</div></div>
       </div>
       </div>
       <div class="cc-sect-body" id="cc-sect-preset" hidden>
@@ -1166,6 +1219,22 @@
         <button class="cc-tab" data-type="image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5-9 9"/></svg>图片</button>
         <button class="cc-tab" data-type="poke"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 000 18"/><circle cx="12" cy="12" r="2"/></svg>拍一拍</button>
         <button class="cc-tab" data-type="voice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg>语音</button>
+        <!-- v3.32.x：其他互动功能字卡（自定义）——与系统预设【其他互动功能字卡】同分类，
+             用户自建的功能字卡存本作用域 cc-groups 同名字段，各功能经 getLibPool 并入抽取；
+             13 个功能 tab 仅「其他互动功能字卡」入口显示，公用/专属入口隐藏（openCcPage 按入口切换） -->
+        <button class="cc-tab" data-type="fish">摸鱼</button>
+        <button class="cc-tab" data-type="eat">吃饭</button>
+        <button class="cc-tab" data-type="period">经期</button>
+        <button class="cc-tab" data-type="water">喝水</button>
+        <button class="cc-tab" data-type="garden">花园</button>
+        <button class="cc-tab" data-type="sync">同频</button>
+        <button class="cc-tab" data-type="reach">伸手</button>
+        <button class="cc-tab" data-type="cjian">此间</button>
+        <button class="cc-tab" data-type="room">房间</button>
+        <button class="cc-tab" data-type="piggy">存钱罐</button>
+        <button class="cc-tab" data-type="drift">漂流瓶</button>
+        <button class="cc-tab" data-type="interact">互动回应</button>
+        <button class="cc-tab" data-type="music">音乐</button>
       </div>
       <div class="cc-toolbar">
         <button class="cc-tool" id="cc-new-group"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8a4 4 0 100 8 4 4 0 000-8z"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.6-2-3.4-2.3 1a7 7 0 00-2-1.2L14.2 3h-4l-.4 2.6a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.6A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.6h4l.4-2.6a7 7 0 002-1.2l2.3 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z"/></svg>管理分组</button>
@@ -1285,9 +1354,32 @@
         </div>
         <!-- v3.16.x：复制诊断信息——遇设备/浏览器兼容问题时，用户一键复制本机环境信息发给开发者，
              避免靠描述反推（此前每台新设备报障都要来回猜） -->
+        <!-- v3.26.x #176：信息诊断分组说明（设备兼容诊断 + 屏幕适配诊断两行归属） -->
+        <div class="gs-title">信息诊断</div>
         <div class="set-row" id="row-diagnostics">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></div>
-          <div class="txt">复制诊断信息<span class="sub">遇到兼容问题发给开发者</span></div>
+          <div class="txt">设备兼容诊断<span class="sub">遇到兼容问题发给开发者（原复制诊断信息）</span></div>
+          <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- v3.26.x #175：屏幕适配诊断（与信息诊断分开）——专项定位跨设备屏幕适配问题
+             （顶部空白/双倍避让/底部裁切/缩放异常），device.js 采集+自动判定 -->
+        <!-- v3.26.x #185：顶部避让修正——「系统保留/覆盖」两形态 JS 无法区分（信号相同），
+             不同机型各属其一：开启=声明本机为覆盖形态（恢复 env 顶部避让+全屏高度含 env），
+             修「Mochi 行与系统时间重叠」；默认关=系统保留形态（修「底部白带」）。 -->
+        <div class="set-row">
+          <div class="txt">顶部避让修正<span class="sub">顶部 Mochi 行与手机时间重叠时开启；底部出现白带时关闭（改后自动刷新）</span></div>
+          <label class="toggle"><input type="checkbox" id="safe-top-force"><span class="tk"></span></label>
+        </div>
+        <div class="set-row" id="row-screen-diag">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/><path d="M8 6h8"/></svg></div>
+          <div class="txt">屏幕适配诊断<span class="sub">顶部空白 / 底部裁切 / 缩放异常一键定位</span></div>
+          <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
+        </div>
+        <!-- v3.26.x #177：功能诊断——逐个测试全部功能（入口/页面/图标/打开/关闭），
+             device.js collectFuncDiag 顺序执行+自动判定，报告哪些正常哪些异常 -->
+        <div class="set-row" id="row-func-diag">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
+          <div class="txt">功能诊断<span class="sub">逐个测试全部功能是否正常（约 15 秒）</span></div>
           <div class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></div>
         </div>
         <!-- v3.26.x：查看存储——用户反馈「存储已用 1.x GB」时，能一眼看出各功能占多少空间，
@@ -1308,7 +1400,7 @@
       <div class="ver-credit">原版小红书@言序（1842523578）</div>
       <!-- v3.27.x：设置页底部防骗声明 -->
       <div class="set-alert">
-        <b>Mochi字卡网站免费。</b>作者只有小红书这一个账号（小红书@言序（1842523578））。如有出现任何收费情况，均为诈骗，注意防止被骗。
+        <b>Mochi字卡网站免费。</b>作者只有两个账号：小红书@言序（1842523578）和抖音@言序（58334080131）；作者不玩抖音、不回消息，是看到有人想花钱求网站才开的号，仅用于发布本站链接。本站不收取任何费用，如有出现任何收费情况，均为诈骗，注意防止被骗。二传、分享本站链接必须标注作者署名：小红书 @言序（1842523578），禁止删除或修改；严禁收费倒卖本站链接、安装包——如果你是花钱买来的链接：你被骗了，请拒付退款并举报卖家。
       </div>
     </div>
 
@@ -1347,6 +1439,29 @@
           <button class="storage-clear" id="st-clear-err" type="button">清理错误诊断记录</button>
           <div class="storage-hint">包括最近报错、环境变化、长任务卡顿、网络失败、交互轨迹等诊断缓存（__diag-*）。清理后诊断角标归零，不影响聊天、字卡、头像、音乐等任何业务数据。</div>
         </div>
+        <!-- v3.26.x 存储优化：媒体池统计与孤儿清理（mark-and-sweep 在 media-pool.js，接线在 personalize.js） -->
+        <div class="cal-card glass">
+          <div class="cal-card-title">媒体池（聊天图片/表情去重仓库）</div>
+          <div class="storage-row"><span>媒体池占用</span><b id="st-media">统计中…（IndexedDB）</b></div>
+          <div class="storage-row"><span>孤儿媒体（已无任何聊天/收藏引用）</span><b id="st-media-orphan">未扫描</b></div>
+          <button class="storage-clear" id="st-media-gc" type="button">扫描并清理孤儿媒体</button>
+          <div class="storage-hint">聊天和收藏里的同一张图片/表情在池里只存一份；删除消息或收藏后，不再被引用的图片会成为「孤儿」。本操作只删孤儿池条目，<b>不改聊天记录和收藏本身</b>。扫描需通读全部聊天记录（大历史较慢），存储繁忙读不完会自动放弃、绝不盲删；删除不可撤销，建议先导出备份。</div>
+        </div>
+        <!-- v3.26.x 存储优化：持久存储申请（navigator.storage.persist） -->
+        <div class="cal-card glass">
+          <div class="cal-card-title">持久存储</div>
+          <div class="storage-row"><span>当前状态</span><b id="st-persist">读取中…</b></div>
+          <button class="storage-clear" id="st-persist-btn" type="button" hidden>申请持久存储</button>
+          <div class="storage-hint">申请成功后浏览器承诺不自动清理本应用数据（同域其他站点占满配额时更不容易被挤掉）。注意：持久化不是备份，定期导出备份仍是唯一可靠防线。</div>
+        </div>
+        <!-- #168 字卡库瘦身：分组体积扫描与整组删除（后端 storage-slim.js，接线 personalize.js） -->
+        <div class="cal-card glass">
+          <div class="cal-card-title">字卡库瘦身</div>
+          <div class="storage-row"><span>各字卡库合计</span><b id="st-cc">点「扫描」后显示</b></div>
+          <button class="storage-clear" id="st-cc-scan" type="button">扫描最大的字卡分组</button>
+          <div id="st-cc-list"></div>
+          <div class="storage-hint">自定义字卡里的 GIF/大图是字卡库体积的大头（历史实测一个库 40MB+）。这里按<b>分组</b>列出最大的字卡组，删除＝整组删除（与在字卡管理页删掉该分组完全一样），<b>不可撤销</b>，删前建议先导出备份。舍不得删的组可以先在字卡管理页导出留底。</div>
+        </div>
       </div>
     </div>
 
@@ -1372,7 +1487,6 @@
         <button class="dq-btn" id="dq-theme" style="flex:1;min-width:64px;padding:9px 6px;border:1px solid var(--card-border,#ddd);border-radius:10px;background:var(--card-bg,#fff);color:var(--ink,#111);font-size:12px;cursor:pointer">深色模式</button>
         <button class="dq-btn" id="dq-bg" style="flex:1;min-width:64px;padding:9px 6px;border:1px solid var(--card-border,#ddd);border-radius:10px;background:var(--card-bg,#fff);color:var(--ink,#111);font-size:12px;cursor:pointer">壁纸</button>
         <button class="dq-btn" id="dq-radius" style="flex:1;min-width:64px;padding:9px 6px;border:1px solid var(--card-border,#ddd);border-radius:10px;background:var(--card-bg,#fff);color:var(--ink,#111);font-size:12px;cursor:pointer">圆角</button>
-        <button class="dq-btn" id="dq-random" style="flex:1;min-width:64px;padding:9px 6px;border:none;border-radius:10px;background:var(--ink,#111);color:#fff;font-size:12px;cursor:pointer">随机美化</button>
         <button class="dq-btn" id="dq-drawer" style="flex:1;min-width:64px;padding:9px 6px;border:1px solid var(--ink,#111);border-radius:10px;background:var(--card-bg,#fff);color:var(--ink,#111);font-size:12px;cursor:pointer">边看边调</button>
       </div>
       <div class="cg-title">颜色与透明度</div>
@@ -1430,7 +1544,7 @@
         </div>
         <div class="set-row" id="row-widget-opacity">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18" stroke-dasharray="2 3"/></svg></div>
-          <div class="txt">小组件透明度</div>
+          <div class="txt">小组件透明度（全局默认）</div>
           <div class="val" id="widget-opacity-val"></div>
         </div>
       </div>
@@ -1544,10 +1658,6 @@
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6M3 13a9 9 0 109-5"/></svg></div>
           <div class="txt">撤销最近改动<span class="sub">恢复最近一次批量操作前的美化</span></div>
         </div>
-        <div class="set-row" id="row-beauty-random">
-          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8" cy="8" r="1.2" fill="#111111" stroke="none"/><circle cx="16" cy="16" r="1.2" fill="#111111" stroke="none"/><circle cx="16" cy="8" r="1.2" fill="#111111" stroke="none"/><circle cx="8" cy="16" r="1.2" fill="#111111" stroke="none"/></svg></div>
-          <div class="txt">一键随机美化<span class="sub">随机配色+圆角，换换心情</span></div>
-        </div>
         <div class="set-row" id="row-beauty-reset-all">
           <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-5.5 3.5-10 10-10 3.7 0 7 2 8.8 5M22 12c0 5.5-3.5 10-10 10-3.7 0-7-2-8.8-5"/></svg></div>
           <div class="txt">恢复全部默认美化<span class="sub">清空所有美化设置 · 已保存方案不受影响</span></div>
@@ -1583,6 +1693,7 @@
             <div class="lic-pills">
               <span class="lic-pill">纯本地存储</span>
               <span class="lic-pill">无需联网</span>
+              <span class="lic-pill">完全免费·禁止倒卖</span>
               <span class="lic-pill">开源 · 支持二传二改</span>
               <span class="lic-pill">支持私人部署</span>
             </div>
@@ -1596,12 +1707,14 @@
             <span class="lic-pill">可二传二改</span>
             <span class="lic-pill">支持私人部署</span>
             <span class="lic-pill">禁止商用</span>
+            <span class="lic-pill">严禁倒卖</span>
             <span class="lic-pill">需保留署名</span>
             <span class="lic-pill">注明灵感来源</span>
           </div>
           <div class="lic-p">Mochi 字卡为<b>原创独立作品（即原版）</b>，代码已在 GitHub 完全公开，支持私人部署，与网站同步更新。</div>
           <div class="lic-li" style="margin-top:6px">- 可自由二传、二改，支持私人部署，<b>禁止商用</b>，必须保留署名：<b>小红书 @言序（1842523578）</b>（禁止删除或修改）</div>
           <div class="lic-li">- 借鉴功能或代码，必须标注灵感来源：Mochi 字卡 · 小红书 @言序（1842523578）</div>
+          <div class="lic-li">- <b>严禁以任何形式收费倒卖本站链接、安装包</b>——本站完全免费，如果你是花钱买来的链接：你被骗了，请拒付退款并举报卖家</div>
         </div>
 
         <!-- 关于星言字卡与灵感来源（README.md） -->
@@ -1644,17 +1757,18 @@
           <div class="lic-li">TA 的查岗：温柔关心式查岗问题卡（单选 / 文字作答 / 互动动作），作答后 TA 会回应</div>
           <div class="lic-li">批量发送消息：聊天输入栏「批量发送」按钮，可插入表情包 / 图片 / 文字，每条单独一条，多条按顺序一次性发送</div>
           <div class="lic-li">语音消息：聊天输入栏「麦克风」按钮录音，最长 60 秒可试听后发送为语音消息</div>
-          <div class="lic-li">桌面【收藏】：我的收藏 / 联系人的收藏 分页浏览，收藏设置里可调联系人自动收藏概率（聊天消息 / 互动卡片 / 我的回信 / 朋友圈动态）</div>
+          <div class="lic-li">桌面【收藏】：我的收藏 / 联系人的收藏 分页浏览，收藏设置里可调联系人自动收藏概率（聊天消息 / 互动卡片 / 我的回信 / 朋友圈动态）；顶栏勾选图标进入批量管理，可多选 / 全选批量删除收藏（v3.31.x）</div>
           <div class="lic-li">隐藏联系人的表情包：开启后聊天与朋友圈的表情包面板只显示「我的表情包」</div>
           <div class="lic-li">允许删除联系人消息：默认关闭，开启后长按 TA 的消息可永久删除</div>
             </div>
           </details>
 
           <details class="lic-grp">
-            <summary><span class="lg-num">02</span><span class="lg-name">字卡系统</span><span class="lg-count">13</span></summary>
+            <summary><span class="lg-num">02</span><span class="lg-name">字卡系统</span><span class="lg-count">14</span></summary>
             <div class="lg-body">
           <div class="lic-li">字卡库：浏览全部字卡，支持搜索与自定义分组管理</div>
           <div class="lic-li">聊天字卡分类可上传：【主字卡】【颜文字】【emoji】【表情包】【图片】【拍一拍】【语音】分类</div>
+          <div class="lic-li">其他互动功能字卡（自定义）：字卡库→可自定义字卡→其他互动功能字卡·公用 / ·专属，可为摸鱼 / 吃饭 / 经期 / 喝水 / 花园 / 音乐等功能添加自定义字卡（可编辑 / 删除），功能触发时 TA 会随机使用</div>
           <div class="lic-li">互动卡片可自定义内容，概率触发互动（在字卡库里）</div>
           <div class="lic-li">TA 的询问 / 小问题 / 好奇 / 吐槽 / 查岗（含互动动作）/ 邀请：题库内容均可自定义</div>
           <div class="lic-li">寻踪日常字卡：地点、在做什么、说的话，均可自定义</div>
@@ -1842,7 +1956,7 @@
           <details class="lic-grp">
             <summary><span class="lg-num">16</span><span class="lg-name">生活工具</span><span class="lg-count">6</span></summary>
             <div class="lg-body">
-          <div class="lic-li">【备忘录】待办管理：置顶 / 截止日期 / 临期排序 / 一键清已完成；TA 会催办临期事项、偶尔帮你勾掉最旧一条，桌面横幅实时显示待办数</div>
+          <div class="lic-li">【备忘录】待办管理：置顶 / 截止日期 / 临期排序 / 一键清已完成；添加备忘 TA 会在聊天里回应追问，还能概率催办提醒（开关 + 概率可调，命中后至少隔 2 天一次，不频扰）、偶尔帮你勾掉最旧一条</div>
           <div class="lic-li">【喝水】今日杯数进度环 + 近 7 天柱状图，目标杯数 / 杯量自定义；TA 定时催喝水、达标夸奖，战报可发到聊天</div>
           <div class="lic-li">【吃什么】随机抽菜或转盘抽取，多菜单管理与批量编辑，「问 TA」把菜名发到聊天征求意见；饭点有吃饭提醒（概率可调）</div>
           <div class="lic-li">【存钱罐】存取 + 多个小心愿目标（可请 TA 当监督人），25% / 50% / 75% 进度里程碑庆祝，TA 碎碎念回应与偷偷塞硬币彩蛋</div>
@@ -1909,6 +2023,7 @@
           <div class="lic-li">成员管理：群成员列表查看，给自己和每位成员设群聊专属昵称 / 头像（覆盖桌面形象，可重置）</div>
           <div class="lic-li">成员回复参数独立可调：回复概率 / 速度 / 条数、拍一拍、表情包、emoji、图片、语音、颜文字、引用、撤回补发（回复设置 → 群聊）</div>
           <div class="lic-li">独立的群聊美化：壁纸 / 双方气泡色 / 字体大小 / 头像形状 / 时间轴等只作用于群聊页；表情包、多图、引用、语音、拍一拍与主聊天对齐</div>
+          <div class="lic-li">多群聊分组：可新建多个群聊按成员分组切换；消息列表底部「查看更早的消息」可一直往前翻历史，表情/图片走媒体池去重存储省内存</div>
             </div>
           </details>
 
@@ -1984,7 +2099,7 @@
           <details class="lic-grp">
             <summary><span class="lg-num">27</span><span class="lg-name">占卜</span><span class="lg-count">5</span></summary>
             <div class="lg-body">
-          <div class="lic-li">两种模式：塔罗（22 张大阿卡纳，带正逆位与详细解读）/ 雷诺曼（40 张）</div>
+          <div class="lic-li">两种模式：塔罗（78 张完整牌库：22 大阿卡纳 + 56 小阿卡纳，带正逆位与详细解读）/ 雷诺曼（40 张）</div>
           <div class="lic-li">抽取张数：1 张（运势）/ 3 张（过去 · 现在 · 未来）/ 7 张（完整牌阵）</div>
           <div class="lic-li">洗牌动画 → 牌面滑动 → 抽取 → 翻牌动画，综合解读（一句话总运势 + 问题呼应）</div>
           <div class="lic-li">历史记录（查看 / 删除 / 清空），可把结果发给 TA</div>
@@ -2026,7 +2141,7 @@
           <details class="lic-grp">
             <summary><span class="lg-num">31</span><span class="lg-name">开屏 / 系统</span><span class="lg-count">6</span></summary>
             <div class="lg-body">
-          <div class="lic-li">开屏加载动画（含公告 / 版本时间 / 数据加载等待 / 点击进入）</div>
+          <div class="lic-li">开屏加载动画（含公告 / 版本时间 / 数据加载等待 / 我已阅读并知晓）</div>
           <div class="lic-li">开屏公告远程化：notice.json 在线覆盖公告文案</div>
           <div class="lic-li">状态栏显示真实时间（每 15 秒校准一次）</div>
           <div class="lic-li">底部 tab：桌面 / 字卡库 / 设置，独立全屏页导航与状态栏隐藏</div>
@@ -2053,6 +2168,8 @@
         <button class="fav-tab" data-rp="ck">查岗</button>
         <button class="fav-tab" data-rp="other">其他</button>
       </div>
+      <!-- v3.27.x #218 互动频率引导：进页先讲清「这些都是随机概率、可自行调」，配合聊天页提示条 -->
+      <div class="gs-sub reply-guide-note">以下都是 TA 随机行为的触发概率（%）：嫌频繁就把数值调小，调到 0 = 不再触发；开关关掉 = 彻底关闭该行为。修改即时保存生效。</div>
       <div class="gs-scroll">
         <div class="gs-panel" data-rpanel="chat">
           <div class="gs-title">被动回复（联系人回你）</div>
@@ -2081,6 +2198,7 @@
             <div class="gs-row"><span>触发概率</span><div class="stepper" data-k="py-prob" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="py-prob-val" readonly><button class="stp-max">+</button></div></div>
             <div class="gs-row"><span>最少条数</span><div class="stepper" data-k="py-min" data-min="1" data-max="10" data-step="1"><button class="stp-min">−</button><input class="stp-val" id="py-min-val" readonly><button class="stp-max">+</button></div></div>
             <div class="gs-row"><span>最多条数</span><div class="stepper" data-k="py-max" data-min="2" data-max="10" data-step="1"><button class="stp-min">−</button><input class="stp-val" id="py-max-val" readonly><button class="stp-max">+</button></div></div>
+            <div class="gs-sub">多条字卡回复总开关：关闭后每条消息只回一条、每条只用一张字卡；开启后回复拆成几条由上方「回复条数」控制、每条拼几张由下方「最少/最多条数」控制</div>
           </div>
           <div class="gs-title">主动发送（联系人找你）</div>
           <div class="set-group glass">
@@ -2125,6 +2243,7 @@
           <div class="gs-title">每条消息使用多字卡回复</div>
           <div class="set-group glass">
             <div class="gs-row"><span>多字卡回复</span><label class="toggle"><input type="checkbox" id="gc-py-en"><span class="tk"></span></label></div>
+            <div class="gs-sub">总开关：关闭后每个成员每条消息只回一条、只用一张字卡；开启后条数由上方「回复条数」与下方「最少/最多条数」控制</div>
             <div class="gs-row"><span>触发概率</span><div class="stepper" data-k="gc-py-prob" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="gc-py-prob-val" readonly><button class="stp-max">+</button></div></div>
             <div class="gs-row"><span>最少条数</span><div class="stepper" data-k="gc-py-min" data-min="1" data-max="10" data-step="1"><button class="stp-min">−</button><input class="stp-val" id="gc-py-min-val" readonly><button class="stp-max">+</button></div></div>
             <div class="gs-row"><span>最多条数</span><div class="stepper" data-k="gc-py-max" data-min="2" data-max="10" data-step="1"><button class="stp-min">−</button><input class="stp-val" id="gc-py-max-val" readonly><button class="stp-max">+</button></div></div>
@@ -2270,6 +2389,11 @@
           <div class="gs-row"><span>通话中挂断概率</span><div class="stepper" data-k="call-hangup" data-min="0" data-max="100" data-step="0.01"><button class="stp-min">−</button><input class="stp-val" id="call-hangup-val" readonly><button class="stp-max">+</button></div></div>
         </div>
         <div class="sm-set-hint" style="padding:0 16px 8px">来电概率：TA 主动来电的命中概率。TA 回复或主动发消息后、以及后台每 1-2 分钟定时检查时各掷一次，两次来电至少间隔 5 分钟（冷却）；设为 0 则从不主动来电。接听/忙线/拒接概率：我方呼出时按三者比例互斥分配对方结果（忙线先判，其次拒接，最后接听）。挂断概率：通话接通满 3 分钟后每 60 秒检查一次，命中则对方主动挂断。</div>
+        <div class="gs-title">对方挂断</div>
+        <div class="set-group glass">
+          <div class="gs-row"><span>禁止联系人挂断电话</span><label class="toggle"><input type="checkbox" id="call-no-hangup"><span class="tk"></span></label></div>
+        </div>
+        <div class="sm-set-hint" style="padding:0 16px 8px">开启后无论挂断概率是多少，通话中对方都不会主动挂断（默认关闭，需手动开启）。注意通话概率设置按联系人各自保存：某个联系人的桌面从没保存过挂断概率时，会按默认 2% 计算——个别联系人「挂断几率明明设了 0 还是被挂断」就是这种情况，开此总开关可一并兜住。</div>
         <div class="gs-title">通话恢复</div>
         <div class="set-group glass">
           <div class="gs-row"><span>刷新后恢复通话</span><label class="toggle"><input type="checkbox" id="call-resume"><span class="tk"></span></label></div>
@@ -2389,7 +2513,13 @@
         </span>
         <span class="ch-name">其他互动功能字卡</span>
       </div>
-      <div class="sm-set-hint" style="padding:8px 16px 0">说明：以下为各功能（摸鱼 / 吃饭 / 经期 / 喝水 / 花园 / 同频 / 伸手 / 此间 / 房间 / 存钱罐 / 漂流瓶 / 互动回应）触发时联系人会使用的自搓字卡，非聊天通用字卡，可逐张开启或关闭。</div>
+      <div class="sm-set-hint" style="padding:8px 16px 0">说明：以下为各功能（摸鱼 / 吃饭 / 经期 / 喝水 / 花园 / 同频 / 伸手 / 此间 / 房间 / 存钱罐 / 漂流瓶 / 互动回应）触发时联系人会使用的自搓字卡，非聊天通用字卡，可逐张开启或关闭。页面底部的「使用概率」为各类字卡触发的概率，可自由调整。</div>
+      <!-- v3.32.x：分类使用概率——每个功能分类的触发概率可显示可调（dcf-<分类> 键，默认=历史值）。
+           FIX 2026-09-07 #239：概率框整块从列表上方移到列表下方——13 行 stepper（~794px）插在
+           头部时，.card-list{flex:1;overflow-y:auto} 的 flex 最小尺寸因 overflow 非 visible 归 0，
+           列表被压成 6px 且首屏(top≈1234/视口 808)完全在屏幕外＝「其他互动功能字卡看不到了，
+           点击没有任何内容」（小米15Pro/Chrome 无头 384x808 实测复现）。字卡列表必须回到首屏；
+           stepper 绑定走 getElementById 与 DOM 位置无关，移动无功能影响。 -->
       <div class="card-tabs" id="fc-tabs">
         <button class="cc-tab sel" data-type="fish">摸鱼</button>
         <button class="cc-tab" data-type="eat">吃饭</button>
@@ -2413,6 +2543,22 @@
       <div class="card-list" id="fc-list">
         <!-- 功能触发字卡由 JS 按分类/分组渲染 -->
       </div>
+      <!-- FIX 2026-09-07 #239：概率框移到列表下方（原在 fc-tabs 前，见上注）——字卡列表回到首屏 -->
+      <div class="set-group glass" id="dcf-prob-box" style="margin:10px 12px 12px">
+        <div class="gs-row"><span>摸鱼字卡概率</span><div class="stepper" id="dcf-prob-fish" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-fish-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>吃饭字卡概率</span><div class="stepper" id="dcf-prob-eat" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-eat-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>经期字卡概率（温柔前缀/动作/经期关心）</span><div class="stepper" id="dcf-prob-period" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-period-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>喝水字卡概率</span><div class="stepper" id="dcf-prob-water" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-water-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>花园字卡概率</span><div class="stepper" id="dcf-prob-garden" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-garden-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>同频字卡概率</span><div class="stepper" id="dcf-prob-sync" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-sync-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>伸手字卡概率</span><div class="stepper" id="dcf-prob-reach" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-reach-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>此间字卡概率</span><div class="stepper" id="dcf-prob-cjian" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-cjian-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>房间字卡概率</span><div class="stepper" id="dcf-prob-room" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-room-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>存钱罐字卡概率</span><div class="stepper" id="dcf-prob-piggy" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-piggy-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>漂流瓶字卡概率</span><div class="stepper" id="dcf-prob-drift" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-drift-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>互动回应字卡概率</span><div class="stepper" id="dcf-prob-interact" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-interact-val" readonly><button class="stp-max">+</button></div></div>
+        <div class="gs-row"><span>音乐字卡概率</span><div class="stepper" id="dcf-prob-music" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-music-val" readonly><button class="stp-max">+</button></div></div>
+      </div>
     </div>
 
     <!-- 联系人跨桌面查岗（独立页面，可开关使用） -->
@@ -2424,6 +2570,10 @@
         <span class="ch-name">联系人跨桌面查岗</span>
       </div>
       <div class="sm-set-hint" style="padding:8px 16px 0">说明：联系人跨桌面查岗分两种方向——「联系人对我查岗」是 TA 主动来查我、我回答后 TA 的回应；「联系人申请我对联系人查岗」是 TA 请我去查 TA、TA 被查时的回应。可逐张开启或关闭。</div>
+      <!-- v3.32.x：查岗回应触发概率（dcf-deskcheck，默认 50%） -->
+      <div class="set-group glass" id="dcf-prob-box-dk" style="margin:10px 12px 0">
+        <div class="gs-row"><span>查岗回应概率</span><div class="stepper" id="dcf-prob-deskcheck" data-min="0" data-max="100" data-step="5"><button class="stp-min">−</button><input class="stp-val" id="dcf-prob-deskcheck-val" readonly><button class="stp-max">+</button></div></div>
+      </div>
       <div class="card-tabs" id="dk-tabs">
         <button class="cc-tab sel" data-type="deskcheck">联系人跨桌面查岗</button>
       </div>
@@ -2543,9 +2693,9 @@
         <button class="modal-file" id="modal-file" hidden>从文件导入</button>
         <input type="file" id="modal-file-input" accept=".txt,.json,text/plain,application/json" style="display:none">
         <div class="modal-btns">
-          <!-- v3.25.x：导出txt——诊断文本变长后部分手机剪贴板复制不全，下载文件兜底（opts.exportBtn） -->
+          <!-- v3.25.x：导出按钮——诊断文本变长后部分手机剪贴板复制不全，下载文件兜底（opts.exportBtn）；#227 起 txt 改 docx（Word/WPS 直开） -->
           <!-- v3.26.x：补 type="button"——全站唯一漏写类型的按钮组；缺 type 默认是 submit，在个别 webview 里点【复制/导出/取消/确定】可能触发表单默认行为导致整页刷新（用户反馈） -->
-          <button type="button" class="modal-btn copy" id="modal-export" hidden>导出txt</button>
+          <button type="button" class="modal-btn copy" id="modal-export" hidden>导出docx</button>
           <button type="button" class="modal-btn copy" id="modal-copy" hidden>复制</button>
           <button type="button" class="modal-btn cancel" id="modal-cancel">取消</button>
           <button type="button" class="modal-btn ok" id="modal-ok">确定</button>
@@ -2845,6 +2995,7 @@
           <div class="div-modes div-counts" id="div-counts">
             <button class="div-mode sel" data-count="3">3 张</button>
             <button class="div-mode" data-count="1">1 张</button>
+            <button class="div-mode" data-count="7">7 张</button>
           </div>
           <!-- v3.26.x：占卜对象（可选全部桌面联系人，也可不选；选了对象结果存入主页「占卜记录」） -->
           <div class="div-modes div-targets" id="div-targets"></div>
@@ -3491,6 +3642,9 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="#111111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </span>
         <span class="ch-name">收藏</span>
+        <span class="ch-settings" id="fav-manage-btn" title="批量管理">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M8.5 12.5l2.5 2.5 5-5.5"/></svg>
+        </span>
         <span class="ch-settings" id="fav-settings-btn" title="收藏设置">
           <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
         </span>
@@ -3501,6 +3655,12 @@
       </div>
       <div class="chat-body fav-body" id="fav-list">
         <!-- 收藏的消息由 JS 渲染 -->
+      </div>
+      <!-- v3.31.x 批量管理：底部操作栏（点顶栏勾选图标进入，勾选后可批量删除） -->
+      <div class="fav-batch-bar" id="fav-batch-bar" hidden>
+        <button class="fb-btn" id="fav-batch-cancel">取消</button>
+        <button class="fb-btn" id="fav-batch-all">全选</button>
+        <button class="fb-btn fb-del" id="fav-batch-del" disabled>删除</button>
       </div>
     </div>
 
@@ -3622,6 +3782,7 @@
           <div class="div-counts-wrap">
             <span class="div-mode sel" data-chatcount="3">3 张</span>
             <span class="div-mode" data-chatcount="1">1 张</span>
+            <span class="div-mode" data-chatcount="7">7 张</span>
           </div>
           <!-- v3.26.x：占卜对象（聊天页半框，可选全部桌面联系人，也可不选；选了对象结果存入该联系人主页「占卜记录」） -->
           <div class="div-modes-wrap div-chat-targets" id="div-chat-targets"></div>
@@ -4967,5 +5128,13 @@
   <div class="pwa-ios-hint" id="pwa-ios-hint" hidden>
     <span>在 Safari 中点击「分享」→「添加到主屏幕」使用</span>
   </div>
+  <!-- v3.26.x #134：文档完整性双锚点（防「桌面图标/功能整块缺失」反复复发）。
+       产物 index.html 约 3.6MB 且尾部两块脚本（决策/全屏/移动适配/pwa 更新器）最易
+       被弱网截断，截断不报任何错 → 必须有「读到尾部」的标志才能自检。
+       ① DOM 锚点元素（id=mochi-html-eof）：device.js 启动自检用（缺失=文档被截断）；
+       ② EOF 注释文本 __MOCHI_EOF__：sw.js 写缓存前用 text() 校验（残缺体不进缓存）。
+       两者都必须存在；构建产物在 </html> 后还会再写一份 __MOCHI_EOF__ 兜底注释。 -->
+  <span id="mochi-html-eof" hidden aria-hidden="true"></span>
+<!-- __MOCHI_EOF__ -->
 </body>
 </html>

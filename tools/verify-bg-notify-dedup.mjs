@@ -5,6 +5,8 @@
 //      blob: URL 再交 SW，blob URL 归页面进程，页面后台冻结后系统取不到图 → 回退默认。
 //      修复：dataURL 就地转 Blob 直传 NotificationOptions（icon/badge/image 规范支持
 //      (DOMString or Blob)），无头像时 icon 兜底 NOTIFY_ICON。
+//      （v3.18.x 已反转：Blob 对象实际会令 Chrome 通知失败——NotificationOptions 该三字段
+//      规范要求 USVString——改回 createObjectURL 生成 blob: URL 字符串，见 bg-keep.js 注释）
 //   ② 切后台→回来→再切出，系统通知弹出刚在聊天里看过的互动卡/消息——根因：recentChatDup
 //      精确相等比对，而互动卡通知文本=「前缀+卡面」，记录里只有裸卡面，永远对不上；
 //      且前台收到时什么都不记。修复：双向包含匹配 + 前台 markSeen 记忆（15min TTL）
@@ -35,8 +37,8 @@ function check(desc, ok, detail) {
   check('A1 media Blob 直传：prepMediaBlobs 统一转换 icon/badge/image + 逐级降级阶梯',
     /function prepMediaBlobs\(target, done\)/.test(s) &&
     /\[\[\], \['image'\], \['image', 'badge'\], \['image', 'badge', 'icon'\]\]/.test(s));
-  check('A2 不再有 blob: URL 中转（createObjectURL 仅存于注释）',
-    !/URL\.createObjectURL/.test(s.replace(/\/\/[^\n]*/g, '')));
+  check('A2 v3.18 反转口径：icon/badge/image 经 prepMediaBlobs 转 blob: URL 字符串（createObjectURL）',
+    /URL\.createObjectURL\(b\)/.test(s));
   check('A3 无头像兜底 icon=NOTIFY_ICON（杜绝大图标位空置回退浏览器默认）',
     /if \(!bigIcon\) bigIcon = NOTIFY_ICON;/.test(s));
   check('A4 recentChatDup 双向包含匹配（较短边≥6字）+ 从末尾整条扫/时间戳自排除',
@@ -91,7 +93,7 @@ function ext(p) { const i = p.lastIndexOf('.'); return i < 0 ? '' : p.slice(i); 
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9900 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9900 + Math.floor(Math.random() * 100));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--autoplay-policy=no-user-gesture-required',

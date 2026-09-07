@@ -39,6 +39,10 @@
    全部铺开（其余 card-tabs 共用处不受影响）。
    v3.16.x：功能触发字卡拆到独立页 #fc-tabs（12 个功能 tab 同量级），同样换行铺开 */
 #dc-tabs.card-tabs, #fc-tabs.card-tabs { flex-wrap:wrap; overflow-x:visible; row-gap:8px; }
+/* v3.32.x：自定义字卡页 #cc-tabs 新增 13 个功能分类 tab（其他互动功能字卡），共 20 个，
+   同 dc/fc 换行铺开；三个入口按 openCcPage 切换显示——功能入口只显功能 tab、
+   公用/专属入口只显基础分类 tab（.cc-tabs-sep 分隔条已随分区移除） */
+#cc-tabs.card-tabs { flex-wrap:wrap; overflow-x:visible; row-gap:8px; }
 .cc-tab {
   flex:0 0 auto; display:inline-flex; align-items:center; gap:5px;
   padding:9px 14px; font-size:13px; border-radius:99px;
@@ -48,6 +52,10 @@
   -webkit-tap-highlight-color:transparent;
 }
 .cc-tab svg { width:15px; height:15px; }
+/* v3.32.x：三入口 tab 分区靠 openCcPage 设 hidden 属性实现——.cc-tab 自带
+   display:inline-flex 会覆盖 UA 的 [hidden] 默认隐藏（同 base.css .poke-tools 教训），
+   必须补作者规则 hidden 才真正生效 */
+.cc-tab[hidden] { display:none; }
 .cc-tab.sel { background:#111; color:#fff; border-color:#111; }
 /* 分类 tab 字卡数量徽标 */
 .cc-tab-n {
@@ -213,6 +221,16 @@
    列表改真虚拟滚动窗口（default-cards.js），首尾用 .cc-vspace 占位块撑起总高。 */
 #page-default-cards { overflow-y:auto; }
 #page-default-cards #dc-list { flex:0 0 auto; overflow:visible; min-height:0; -webkit-overflow-scrolling:auto; overscroll-behavior:auto; }
+/* FIX 2026-09-07 #239：互动功能字卡页 / 查岗字卡页同款整页滚动——#132 在 fc 页头部插入
+   13 行「使用概率」stepper（dcf-prob-box ~794px）后，.card-list{flex:1;overflow-y:auto}
+   的 overflow 非 visible 使 flex 自动最小尺寸归 0：#fc-list 被压成 6px 高、列表首屏
+   top≈1234 全在视口（808）外＝「其他互动功能字卡看不到了，点击没有任何内容」
+   （小米15Pro/Chrome 384x808 无头实测复现；概率框已随本修移到列表下方，双保险——
+   未来头部再插入高块也不会再把列表挤没）。dk 页同构预防。 */
+#page-fun-cards { overflow-y:auto; }
+#page-fun-cards #fc-list { flex:0 0 auto; overflow:visible; min-height:0; -webkit-overflow-scrolling:auto; overscroll-behavior:auto; }
+#page-deskcheck { overflow-y:auto; }
+#page-deskcheck #dk-list { flex:0 0 auto; overflow:visible; min-height:0; -webkit-overflow-scrolling:auto; overscroll-behavior:auto; }
 /* 虚拟窗口高度占位块：只用高度撑出滚动区间，本身无内容不可点 */
 .cc-vspace { display:block; margin:0; padding:0; pointer-events:none; }
 .dc-toggle {
@@ -541,6 +559,33 @@
 /* 收藏页分类 tab 第二行（全部/聊天/互动/信件/朋友圈）：不重复顶部留白 */
 .fav-tabs.fav-kind-row { padding-top:0; padding-bottom:8px; }
 .fav-body { padding:6px 18px; }
+
+/* 收藏批量管理（v3.31.x）：顶栏勾选图标进入，条目外侧圆圈勾选，底部操作栏 */
+.fav-batch-bar {
+  display:flex; gap:10px; flex-shrink:0;
+  padding:10px 18px calc(10px + env(safe-area-inset-bottom, 0px));
+  background:rgba(255,255,255,.95); border-top:1px solid rgba(0,0,0,.1);
+}
+.fav-batch-bar[hidden] { display:none; }
+.fb-btn {
+  flex:1; min-height:44px; padding:10px 0; border-radius:14px;
+  border:1px solid rgba(0,0,0,.12); background:rgba(255,255,255,.92);
+  color:#666; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;
+  -webkit-tap-highlight-color:transparent;
+}
+.fb-btn:active { background:rgba(0,0,0,.06); }
+.fb-btn.fb-del { border:none; background:#e05555; color:#fff; }
+.fb-btn.fb-del:active { background:#c94444; }
+.fb-btn.fb-del[disabled] { opacity:.4; }
+.fav-check {
+  width:22px; height:22px; border-radius:50%; align-self:center; flex-shrink:0;
+  border:1.5px solid rgba(0,0,0,.28); background:rgba(255,255,255,.92);
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; -webkit-tap-highlight-color:transparent;
+}
+.fav-check svg { width:13px; height:13px; opacity:0; }
+.fav-check.on { background:var(--ink); border-color:var(--ink); }
+.fav-check.on svg { opacity:1; }
 
 /* ===== 收藏设置页 ===== */
 .fs-stat-box { padding:4px 14px; }
@@ -3003,10 +3048,10 @@ body.mail-emoji-mode #emoji-panel { bottom: calc(64px + var(--mochi-safe-bottom,
 .snake-res-row { display:flex; justify-content:space-between; font-size:12px; color:var(--ink); padding:3px 12px; }
 .snake-res-time { font-size:11px; color:var(--muted); margin-top:6px; }
 .snake-controls { display:flex; gap:10px; justify-content:center; padding:10px 0 4px; }
-.snake-btn { flex:1; max-width:140px; padding:10px; border:none; border-radius:12px; background:var(--ink); color:#fff; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent; }
+.snake-btn { flex:1; max-width:140px; padding:10px; border:none; border-radius:12px; background:var(--ink); color:#fff; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
 .snake-btn:active { opacity:.85; }
 .snake-dpad { display:grid; grid-template-columns:repeat(3,72px); grid-template-rows:repeat(2,64px); gap:8px; justify-content:center; padding:8px 0 2px; }
-.snake-dp { border:1px solid rgba(0,0,0,.12); border-radius:14px; background:rgba(255,255,255,.92); color:var(--ink); font-size:22px; cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent; transition:transform .08s, background .08s; }
+.snake-dp { border:1px solid rgba(0,0,0,.12); border-radius:14px; background:rgba(255,255,255,.92); color:var(--ink); font-size:22px; cursor:pointer; font-family:inherit; -webkit-tap-highlight-color:transparent; touch-action:manipulation; transition:transform .08s, background .08s; }
 .snake-dp:active { background:rgba(0,0,0,.1); transform:scale(.9); }
 .snake-dp[data-dir="up"] { grid-column:2; grid-row:1; }
 .snake-dp[data-dir="left"] { grid-column:1; grid-row:2; }

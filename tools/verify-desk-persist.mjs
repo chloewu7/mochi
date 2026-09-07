@@ -59,7 +59,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
 // ---- 3. 启动无头 Chrome + CDP ----
-const cdpPort = 9500 + Math.floor(Math.random() * 400);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9500 + Math.floor(Math.random() * 400));
 const profileDir = join(process.env.TEMP || '/tmp', 'mochi-desk-persist-' + Date.now());
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',

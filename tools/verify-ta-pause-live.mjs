@@ -39,7 +39,7 @@ const tmpDir = mkdtempSync(join(tmpdir(), 'mochi-verify-tapause-'));
 const built = readFileSync(join(root, 'index.html'), 'utf8');
 writeFileSync(join(tmpDir, 'index.html'), built);
 const baseUrl = 'file:///' + normalize(tmpDir).split(sep).join('/') + '/index.html';
-const cdpPort = 9900 + Math.floor(Math.random() * 200);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9900 + Math.floor(Math.random() * 200));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--disable-audio-output', '--mute-audio', '--autoplay-policy=no-user-gesture-required',

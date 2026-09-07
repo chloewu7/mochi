@@ -116,8 +116,9 @@
 .gm-img-btn { padding: 9px 16px; border-radius: 99px; border: 1px solid rgba(139, 122, 200, 0.3); background: #fff; color: #6d5bb0; font-size: 13px; cursor: pointer; transition: all 0.15s; }
 .gm-img-btn:active { transform: scale(0.96); background: #f5f3fa; }
 
-/* ===== 心意市集底部工具（黑白简约胶囊） ===== */
-.market-foot { display: flex; gap: 10px; justify-content: center; margin-top: 10px; padding: 0 14px; }
+/* ===== 心意市集底部工具（黑白简约胶囊） =====
+   v3.26.x：+flex-wrap（新增心愿单/设置后共 5 颗胶囊，360px 窄屏需换行） */
+.market-foot { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 10px; padding: 0 14px; }
 .market-tool { padding: 10px 24px; border-radius: 99px; background: #fff; border: 1px solid rgba(0, 0, 0, 0.1); color: #111; font-size: 13px; cursor: pointer; transition: all 0.15s; font-weight: 500; }
 .market-tool:active { background: #f2f2f5; transform: scale(0.97); }
 
@@ -243,3 +244,71 @@ textarea.gm-input { min-height: 52px; resize: none; }
 [data-theme="dark"] .market-search { color: #e0d8f0; }
 [data-theme="dark"] .market-search::placeholder { color: #6a6280; }
 [data-theme="dark"] .market-search-clear { color: #c9b8e8; }
+
+/* ===== v3.26.x 心愿单 + 心意集市和心意柜设置（gift-shop.js 渲染） ===== */
+/* 购买弹窗：心愿单按钮 + 底部小字提示 */
+.gb-wishbtn { flex: 1; padding: 12px 0; border-radius: 13px; border: none; font-size: 14px; cursor: pointer; transition: all 0.15s; font-weight: 500; background: rgba(139, 122, 200, 0.12); color: #6d5bb0; }
+.gb-wishbtn:active { transform: scale(0.96); }
+.gb-tiny { margin-top: 10px; font-size: 11px; color: #b0aac4; line-height: 1.6; text-align: center; }
+/* 心愿单面板：双 tab + 行列表 */
+.wish-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.wish-tab { flex: 1; padding: 9px 0; border-radius: 99px; background: #f2f2f5; color: #555; border: none; font-size: 13px; cursor: pointer; transition: all 0.15s; font-weight: 500; white-space: nowrap; }
+.wish-tab.sel { background: linear-gradient(135deg, #8b7ac8, #6d5bb0); color: #fff; box-shadow: 0 2px 8px rgba(109, 91, 176, 0.25); }
+.wish-hint { font-size: 11.5px; color: #a09ab5; line-height: 1.8; margin-bottom: 8px; }
+.wish-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
+.wish-emoji { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; overflow: hidden; flex-shrink: 0; }
+.wish-emoji .wish-img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.wish-info { flex: 1; min-width: 0; }
+.wish-name { font-size: 14px; color: #4a3d6b; font-weight: 600; }
+.wish-price { font-size: 12px; color: #8b7ac8; margin-top: 2px; font-weight: 600; }
+.wish-wish { font-size: 11px; color: #b0aac4; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wish-act { padding: 7px 14px; border-radius: 99px; border: none; background: linear-gradient(135deg, #8b7ac8, #6d5bb0); color: #fff; font-size: 12.5px; cursor: pointer; flex-shrink: 0; transition: transform 0.15s; }
+.wish-act:active { transform: scale(0.94); }
+.wish-act.del { background: #f2f2f5; color: #8a8a8a; }
+/* 设置面板：行 + 开关 + 概率输入 + 使用说明小字 */
+.gs-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 2px; border-bottom: 1px solid rgba(0, 0, 0, 0.05); }
+.gs-lab { font-size: 14px; color: #4a3d6b; line-height: 1.5; }
+.gs-sub { display: block; font-size: 11px; color: #a09ab5; margin-top: 2px; font-weight: 400; }
+.gs-numwrap { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+.gs-num { width: 72px; padding: 8px 10px; border-radius: 11px; border: 1px solid rgba(139, 122, 200, 0.2); background: #faf9fc; font-size: 14px; text-align: right; box-sizing: border-box; color: #4a3d6b; -webkit-appearance: none; appearance: none; }
+.gs-num:focus { border-color: #8b7ac8; outline: none; }
+.gs-pct { font-size: 13px; color: #8b7ac8; font-weight: 600; }
+.gs-switch { position: relative; width: 44px; height: 26px; border-radius: 99px; background: #d8d4e4; transition: background 0.15s; cursor: pointer; flex-shrink: 0; -webkit-tap-highlight-color: transparent; }
+.gs-switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 0.15s; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2); }
+.gs-switch.on { background: #8b7ac8; }
+.gs-switch.on::after { left: 21px; }
+.gs-help { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: #f5f3fa; font-size: 11.5px; color: #8a84a3; line-height: 1.9; word-break: break-word; }
+/* 心意柜 hero 设置入口 */
+.giftbox-set { margin-top: 12px; text-align: center; }
+.giftbox-set button { background: none; border: none; color: #8a8a8a; font-size: 12px; padding: 6px 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.giftbox-set button:active { opacity: 0.6; }
+/* 暗色适配 */
+[data-theme="dark"] .gb-wishbtn { background: rgba(255, 255, 255, 0.08); color: #c9b8e8; }
+[data-theme="dark"] .gb-tiny { color: #6a6280; }
+[data-theme="dark"] .wish-tab { background: rgba(255, 255, 255, 0.08); color: #c9c9cf; }
+[data-theme="dark"] .wish-hint, [data-theme="dark"] .wish-wish { color: #6a6280; }
+[data-theme="dark"] .wish-item { border-color: rgba(255, 255, 255, 0.08); }
+[data-theme="dark"] .wish-name { color: #e0d8f0; }
+[data-theme="dark"] .wish-emoji { background: rgba(255, 255, 255, 0.08) !important; }
+[data-theme="dark"] .wish-act.del { background: rgba(255, 255, 255, 0.1); color: #98989e; }
+[data-theme="dark"] .gs-row { border-color: rgba(255, 255, 255, 0.08); }
+[data-theme="dark"] .gs-lab { color: #c9c0d8; }
+[data-theme="dark"] .gs-sub { color: #6a6280; }
+[data-theme="dark"] .gs-num { background: #2a2638; border-color: rgba(255, 255, 255, 0.12); color: #e0d8f0; }
+[data-theme="dark"] .gs-pct { color: #c9b8e8; }
+[data-theme="dark"] .gs-switch { background: #3a3750; }
+[data-theme="dark"] .gs-help { background: #2a2638; color: #8a84a3; }
+[data-theme="dark"] .giftbox-set button { color: #98989e; }
+/* #142 防御：三 tab/三按钮后长名字防溢出（.gb-tab 文本换行把 tab 撑高、按钮文字溢出） */
+.gb-tab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gb-cancel, .gb-ok, .gb-wishbtn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gb-wishbtn { font-size: 13.5px; }
+/* #142 补：TA 心愿单的可见性——市集商品 ☆ 许愿角标 + 聊天送礼面板直达入口 */
+.gift-item-tawish { position: absolute; top: 8px; left: 8px; z-index: 2; max-width: calc(100% - 16px); box-sizing: border-box; padding: 3px 9px; border-radius: 99px; background: rgba(109, 91, 176, 0.92); color: #fff; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+#page-market .gift-item-tawish { background: rgba(0, 0, 0, 0.78); }
+.gift-wish-row { padding: 6px 14px 2px; }
+.gift-wish-row button { width: 100%; padding: 10px 0; border-radius: 12px; border: 1px dashed rgba(139, 122, 200, 0.4); background: rgba(139, 122, 200, 0.06); color: #6d5bb0; font-size: 13px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.gift-wish-row button:active { transform: scale(0.98); background: rgba(139, 122, 200, 0.12); }
+[data-theme="dark"] .gift-item-tawish { background: rgba(201, 184, 232, 0.85); color: #1c1c1e; }
+[data-theme="dark"] #page-market .gift-item-tawish { background: rgba(201, 184, 232, 0.85); color: #1c1c1e; }
+[data-theme="dark"] .gift-wish-row button { background: rgba(255, 255, 255, 0.06); border-color: rgba(201, 184, 232, 0.4); color: #c9b8e8; }

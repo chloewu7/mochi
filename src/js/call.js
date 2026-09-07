@@ -17,6 +17,10 @@
       busy: c['call-busy'] !== undefined ? c['call-busy'] : CALL.busy,
       reject: c['call-reject'] !== undefined ? c['call-reject'] : CALL.reject,
       hangup: c['call-hangup'] !== undefined ? c['call-hangup'] : CALL.hangup,
+      // #200：禁止联系人挂断总开关（回复/通话设置，默认关）——开启后通话中对方永不主动挂断。
+      // 同时兜住「挂断几率为 0 仍被挂断」：该设置按桌面（联系人）隔离存储，从未保存过该键的
+      // 联系人会回落 2% 默认值，总开关与下方 hangup<=0 双重硬闸一起把这类情况全部拦死
+      nohangup: c['call-no-hangup'] === 1 || c['call-no-hangup'] === '1',
       resume: c['call-resume'] !== undefined ? c['call-resume'] : 1
     };
   }
@@ -155,6 +159,7 @@
         syncCallName();
         syncCallAv();
         mini.hidden = false;
+        liftMiniIntoSafeArea(); // v3.26.x #137：显示时校正，防旧坐标落进系统状态栏区
       }
     } else {
       mini.hidden = true;
@@ -185,17 +190,70 @@
   // v3.28.x #114：iOS standalone 顶部被系统状态栏占用的高度（iPhone15 实测 59px）。
   //   旧存档/拖拽落点若在状态栏区，触点被系统栏吞、缩略窗拖不动（用户报障「缩略窗在
   //   顶部动不了」）。落位/拖拽时把上边界抬到系统状态栏下方。
+  // v3.26.x #136（复现修，iPhone15 + iOS 18.7 + 全屏态）：ios-fs-active 下 .phone 用
+  //   100vh 铺满物理屏后 screen.height == visualViewport.height == 852，差值=0 落在
+  //   20-160 过滤区间外 → 原 diff 探针返回 0，小框存档 y≈0 时整个 56px 高的胶囊
+  //   落进系统状态栏悬浮区 → 点挂断没反应、也拖不出来（触点全被系统栏吞）。
+  //   三级探测链：① env() 探针（隐藏 fixed 元素实测 env(safe-area-inset-top)，
+  //   viewport-fit=cover 下 WebKit 会返回真实系统栏高度，是标准做法）；
+  //   ② 原 screen-vv 差值法（v3.28.x #114 通道，部分环境仍有效）；
+  //   ③ 47px 保守兜底（iPhone 刘海/灵动岛机型系统状态栏最小高度 47-62px，47 取下限；
+  //   仅 standalone iOS 生效，非刘海小屏（SE 20px）被多让 27px 无实际影响）。
+  //   确保任何 iOS 型号下小框永不落进状态栏区。
+  let _miniSafeTopCache = -1;
   function miniSafeTop() {
     try {
       if (!document.documentElement.classList.contains('ios-pwa-standalone')) return 0;
-      const sh = (window.screen && window.screen.height) || 0;
-      const ih = window.innerHeight || 0;
-      if (sh > 0 && ih > 0) {
-        const diff = sh - ih;
-        if (diff >= 20 && diff <= 160) return diff;
+      if (_miniSafeTopCache >= 0) return _miniSafeTopCache;
+      let top = 0;
+      // ① env() 探针：viewport-fit=cover 下返回真实系统状态栏高度（0 则本环境确实无避让）
+      try {
+        const probe = document.createElement('div');
+        probe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;padding-top:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none;';
+        document.body.appendChild(probe);
+        const v = parseFloat(getComputedStyle(probe).paddingTop);
+        document.body.removeChild(probe);
+        if (!isNaN(v) && v >= 20 && v <= 160) top = v;
+      } catch (e1) {}
+      // ② screen-vv 差值法（v3.28.x #114 原通道）
+      if (!top) {
+        const sh = (window.screen && window.screen.height) || 0;
+        const ih = window.innerHeight || 0;
+        if (sh > 0 && ih > 0) {
+          const diff = sh - ih;
+          if (diff >= 20 && diff <= 160) top = diff;
+        }
       }
+      // ③ 59px 保守兜底：probe 与 diff 都失手（如 #137 环境 env=0 且 100vh 铺满后 vv=screen）。
+      //    取 iPhone15 实测系统状态栏高度 59px（#114 通道）——覆盖刘海/灵动岛机型全部
+      //    44-59px 状态栏；老非刘海机型（SE 20px 栏）被多让 ~39px，仅顶部拖拽上限略低，无害。
+      if (!top) top = 59;
+      _miniSafeTopCache = top;
+      return top;
     } catch (e) {}
     return 0;
+  }
+  // v3.26.x #137 补强：小框「显示时」抬升——此前只在文件加载时对旧存档抬一次，但小框
+  // 有 5 处显示点（接通 2s 自动最小化/手动缩小/刷新恢复通话/设置开关/恢复通话路径），
+  // 任何路径显示「内联 top 低于系统状态栏区」的坐标都会复现「卡在顶上点不了拖不动」。
+  // 统一在显示后校正：内联 top 存在且 < miniSafeTop() → 抬到安全线并回写存档。
+  // （默认底部居中位没有内联 top，不受影响；函数声明提升，5 处显示点均可调。）
+  function liftMiniIntoSafeArea() {
+    try {
+      if (!mini || mini.hidden) return;
+      const st = miniSafeTop();
+      if (st <= 0) return;
+      const m = String(mini.style.top || '').match(/^(-?\d+(\.\d+)?)px$/);
+      if (!m) return; // 无内联 top（默认底部居中），无需处理
+      const y = parseFloat(m[1]);
+      if (y < st) {
+        mini.style.top = st + 'px';
+        if (mini.style.bottom && mini.style.bottom !== 'auto') mini.style.bottom = 'auto';
+        if (!miniPos) miniPos = { left: mini.style.left, top: mini.style.top };
+        else miniPos.top = mini.style.top;
+        try { store.set('call-mini-pos', JSON.stringify(miniPos)); } catch (e2) {}
+      }
+    } catch (e) {}
   }
   let miniPos = null;
   try { miniPos = JSON.parse(store.get('call-mini-pos') || 'null'); } catch (e) {}
@@ -230,8 +288,13 @@
   }
 
   // v3.26.x：通话昵称与聊天域解耦——优先读聊天专用键 cs-lbl-partner（聊天设置里设的联系人
-  // 昵称），未设置时默认 TA，不再回退桌面 lbl-partner（用户要求：聊天昵称不跟随桌面）
-  function partnerName() { return store.get('cs-lbl-partner') || (window.taWord ? window.taWord() : 'TA'); }
+  // 昵称），未设置时回退联系人名片名，最后默认 TA，不再回退桌面 lbl-partner（用户要求：
+  // 聊天昵称不跟随桌面）。v3.26.x：回退链补齐联系人名片名，与聊天顶栏（cs-lbl-partner →
+  // 名片名 → TA）保持一致——只改名片（联系人管理改名）时通话小框不再显示成 TA/他/她
+  function partnerName() {
+    const nick = store.get('cs-lbl-partner') || (window.contactNameFor ? window.contactNameFor(window.__activeCid || 'default') : '');
+    return nick || (window.taWord ? window.taWord() : 'TA');
+  }
   // v3.12.x：通话头像跟随聊天域——优先读聊天专用键 cs-avatar-partner（头像互动半框/换头像写的就是它），
   // 未设置时回退桌面键 avatar-partner；此前只读桌面键，导致通话面板不跟随换头像
   function partnerAv() { return store.get('cs-avatar-partner') || store.get('avatar-partner') || ''; }
@@ -306,8 +369,11 @@
     let name = '';
     try {
       const s = (window.storeFor && window.storeFor(currentCall.cid)) || store;
-      // v3.26.x：与 partnerName 同步解耦——先读聊天专用键，未设默认 TA，不再读桌面键
-      name = s.get('cs-lbl-partner') || (window.taWord ? window.taWord() : 'TA');
+      // v3.26.x：与 partnerName 同步解耦——先读聊天专用键，再回退联系人名片名，最后默认
+      // TA，不再读桌面键；性别称呼按归属桌面读（跨桌面通话仍显示正确的 TA）
+      name = s.get('cs-lbl-partner')
+        || (window.contactNameFor ? window.contactNameFor(currentCall.cid) : '')
+        || (window.taWordFor ? window.taWordFor(currentCall.cid) : (window.taWord ? window.taWord() : 'TA'));
     } catch (e) { name = currentCall.name || partnerName(); }
     if (name === shownName) return;
     shownName = name;
@@ -337,6 +403,7 @@
         syncCallName();
         syncCallAv();
         mini.hidden = false;
+        liftMiniIntoSafeArea(); // v3.26.x #137：显示时校正，防旧坐标落进系统状态栏区
       } else {
         mini.hidden = true;
       }
@@ -377,7 +444,10 @@
           checkCount++;
           if (checkCount >= 60) {
             checkCount = 0;
-            if (Math.random() * 100 < callCfg().hangup) {
+            // #200：总开关开启或挂断概率 <=0 时硬闸不掷骰——概率为 0 本就不该挂断，
+            // 这里再显式拦一道，防设置读取异常回落默认值导致「设 0 仍被挂断」
+            const hp = callCfg();
+            if (!(hp.nohangup || hp.hangup <= 0) && Math.random() * 100 < hp.hangup) {
               endCall('对方挂断了电话');
             }
           }
@@ -411,7 +481,7 @@
   // 结束通话：清界面 + 聊天系统消息（接通过必带时长）+ 记录
   // v3.5.51：真实时长从接听时刻计算（覆盖对方挂断/不明原因中断路径）；
   //   接通后结束 → 系统消息明确「通话已挂断 / 对方已挂断 · 时长 xx」
-  function endCall(text) {
+  function endCall(text, holdSilent) {
     clearCallActive(); // v3.26.x：正常结束清除进行中标记（中断恢复靠残留检测）
     // v3.5.127：所有结束路径（超时/拒绝/挂断/对方挂断）统一停铃声
     if (window.stopSfx) window.stopSfx('ring');
@@ -421,7 +491,9 @@
     if (mask) mask.hidden = true;
     if (mini) mini.hidden = true;
     if (cdEl) cdEl.hidden = true;
-    if (currentCall) {
+    if (currentCall && !holdSilent) {
+      // #161：holdSilent=true（响铃挂起静默收尾）只清 UI 不写未接——未接由
+      // resumeHeldCall 在挂起超时/无法重响时统一补写，避免「用户明明能接却被判未接」
       // 真实通话时长：durationSec（接通后已计时）兜底用 connectedTime 计算
       const dur = currentCall.durationSec || (currentCall.connectedTime ? Math.max(0, Math.floor((Date.now() - currentCall.connectedTime) / 1000)) : 0);
       const dir = currentCall.direction;
@@ -444,6 +516,65 @@
     shownAv = null;
     shownName = null;
   }
+  // v3.31.x：后台来电通知——页面在后台时无法弹来电 UI（也无法接听），改为发系统通知
+  //（走 bg-keep 的 showSysNotification 链路：SW 通知页面隐藏也能显示）。
+  // force=true：来电是「错过就没了」的单发事件，绕过 bgNotifyCheck 的 15s 过渡期/去重闸门。
+  // avFixed=true：来电归属当前桌面，头像用 partnerAv() 权威值，空则走中立 mochi 图标。
+  // #161：加 hint 尾缀——通知文案变为「XX 来电了，快回来接听，对方会等你几分钟」
+  function bgCallNotify(name, hint, avOverride) {
+    try {
+      if (window.bgNotifyCheck) window.bgNotifyCheck(name + ' 来电了' + (hint ? '，' + hint : ''), Date.now(), { name: name + '来电', av: avOverride || partnerAv(), avFixed: true, force: true });
+    } catch (e) {}
+  }
+  // #161：响铃挂起——后台来电不再「命中即未接」（用户反馈：点开通知永远接不到，
+  // 联系人已经挂断＝设计缺陷）。改为：先发系统通知 + 挂起来电（CALL_HOLD_KEY 全局
+  // 根键，含归属 cid——回前台时可能停在别的桌面；已登记 contacts.js EXCLUDE 防迁移），
+  // CALL_HOLD_MS 内回到应用（visibilitychange visible / 冷启动恢复）→ 重新响铃可接听；
+  // 超时未回 → resumeHeldCall 补写「未接来电」记录+系统消息。
+  const CALL_HOLD_MS = 3 * 60 * 1000;
+  const CALL_HOLD_KEY = 'xy-home-v2:call-hold';
+  function heldMissedHtml(nm) {
+    return '<svg class="st-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>' + nm + ' 来电 · 未接听';
+  }
+  function holdIncomingCall(name, cid, avOverride) {
+    try {
+      // 覆盖前先处理上一条已超时未处理的挂起（页面冻结期间第二次来电的场景）
+      const prev = readCallHold();
+      if (prev && prev.cid && Date.now() - prev.ts > CALL_HOLD_MS) {
+        notifyCallEnd(prev.cid, heldMissedHtml(prev.name || partnerName()), 'in', '未接听');
+      }
+      const h = { ts: Date.now(), name: name, cid: cid || (window.__activeCid || 'default') };
+      localStorage.setItem(CALL_HOLD_KEY, JSON.stringify(h));
+      if (window.idbSet) { try { window.idbSet(CALL_HOLD_KEY, h); } catch (e) {} }
+    } catch (e) {}
+    bgCallNotify(name, '快回来接听，对方会等你几分钟', avOverride);
+  }
+  // #204：暴露给 incoming-requests.js——跨桌面来电后台命中时同走「响铃挂起」（原只发
+  // 通知即丢弃，切回应用无来电 UI 也无未接记录）；avOverride 用归属联系人头像
+  window.callHoldIncoming = holdIncomingCall;
+  function readCallHold() {
+    try {
+      const h = JSON.parse(localStorage.getItem(CALL_HOLD_KEY) || 'null');
+      return (h && h.ts) ? h : null;
+    } catch (e) { return null; }
+  }
+  function clearCallHold() {
+    // 写 {ts:0} 而非删除：防 idbRestore 用 IDB 旧值回填出「幽灵挂起」重复记未接
+    try { localStorage.setItem(CALL_HOLD_KEY, '{"ts":0}'); } catch (e) {}
+    if (window.idbSet) { try { window.idbSet(CALL_HOLD_KEY, { ts: 0 }); } catch (e) {} }
+  }
+  // 回前台/冷启动检查挂起：有效→重新响铃（incomingCall(true) 不重复发系统消息）；
+  // 过期/桌面不匹配/已在通话→补写未接（notifyCallEnd 跨桌面自动落到归属桌面）
+  function resumeHeldCall() {
+    const h = readCallHold();
+    if (!h) return;
+    clearCallHold();
+    if (Date.now() - h.ts <= CALL_HOLD_MS && !currentCall && h.cid === (window.__activeCid || 'default')) {
+      incomingCall(true);
+      return;
+    }
+    notifyCallEnd(h.cid || (window.__activeCid || 'default'), heldMissedHtml(h.name || partnerName()), 'in', '未接听');
+  }
   // 监听联系人重命名事件，实时同步通话昵称
   document.addEventListener('contact-renamed', (e) => {
     if (currentCall && e.detail && e.detail.id === currentCall.cid) {
@@ -452,9 +583,17 @@
   });
   // v3.5.129：响铃中切后台（锁屏/切走）→ 停铃声并结束来电——
   // 后台无法接听，30 秒干响没有意义（安卓后台音频还会常驻媒体通知）
+  // v3.31.x：结束的同时补发一条系统通知（未接来电），用户在通知栏可见
+  // #161：升级为「响铃挂起」——切后台静默收尾不判未接（endCall 第二参），
+  // 挂起 CALL_HOLD_MS 内回到应用重新响铃可接听，超时才由 resumeHeldCall 补写未接
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' && currentCall && currentCall.status === 'ringing') {
-      endCall('未接听');
+      const cid = currentCall.cid || (window.__activeCid || 'default');
+      const nm = currentCall.name || partnerName();
+      endCall('', true);
+      holdIncomingCall(nm, cid);
+    } else if (document.visibilityState === 'visible') {
+      resumeHeldCall();
     }
   });
   // v3.6.x：通话弹层开始时先关闭大图查看器——img-view-mask z-index 高于 call-mask，
@@ -465,8 +604,9 @@
       if (iv) iv.hidden = true;
     } catch (e) {}
   }
-  // 来电
-  function incomingCall() {
+  // #161：isReplay——响铃挂起回前台重响时 true，不重复发「给你打来了语音通话」系统消息
+  //（挂起前那次前台响铃已发过；后台触发路径则由重响首发，聊天记录两种路径都恰一条）
+  function incomingCall(isReplay) {
     if (currentCall) return;
     closeImageOverlay();
     // v3.5.60：来电播放设置的铃声音效
@@ -486,7 +626,7 @@
     if (durEl) durEl.textContent = '00:00';
     if (mask) mask.hidden = false;
     setMaskBtns('ringing');
-    if (window.chatAddSystem) window.chatAddSystem('<svg class="st-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>' +  name + ' 给你打来了语音通话');
+    if (!isReplay && window.chatAddSystem) window.chatAddSystem('<svg class="st-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>' +  name + ' 给你打来了语音通话');
     // 30 秒倒计时未接
     let count = 30;
     if (cdEl) { cdEl.hidden = false; cdEl.textContent = count + ' 秒后未接听'; }
@@ -529,6 +669,7 @@
             syncCallName();
             syncCallAv();
             mini.hidden = false;
+            liftMiniIntoSafeArea(); // v3.26.x #137：显示时校正，防旧坐标落进系统状态栏区
           }
         }
       }
@@ -595,7 +736,7 @@
           if (currentCall === callRef && callRef.status === 'connected') {
             if (callMiniEnabled()) {
               if (mask) mask.hidden = true;
-              if (mini) { syncCallName(); syncCallAv(); mini.hidden = false; }
+          if (mini) { syncCallName(); syncCallAv(); mini.hidden = false; liftMiniIntoSafeArea(); /* v3.26.x #137 显示时校正 */ }
             }
           }
         }, 2000);
@@ -672,7 +813,6 @@
   function callLast() { const v = parseInt(store.get('records-call-last'), 10); return isNaN(v) ? 0 : v; }
   function maybeIncoming() {
     try {
-      if (document.hidden) return; // v3.5.127：后台不触发来电
       if (currentCall) return;
       const now = Date.now();
       // v3.6.x：冷却戳为未来时间（设备时钟被改动过）→ 按 0 处理，避免来电被永久锁死
@@ -680,6 +820,13 @@
       if (now - last < 300000) return; // 5 分钟冷却
       if (Math.random() * 100 >= callCfg().incoming) return;
       store.set('records-call-last', String(now));
+      // v3.31.x：后台命中来电不再直接放弃（原 v3.5.127 直接 return，后台永远没来电通知）
+      // #161：升级为「响铃挂起」——不再即判未接，先发通知+挂起，3 分钟内回到应用
+      // 重新响铃可接听，超时由 resumeHeldCall 补写未接（写记录/系统消息收口在挂起侧）
+      if (document.hidden) {
+        holdIncomingCall(partnerName(), window.__activeCid || 'default');
+        return;
+      }
       incomingCall();
     } catch (e) {}
   }
@@ -727,7 +874,7 @@
         if (callMiniEnabled()) {
           if (mask) mask.hidden = true;
           if (cdEl) cdEl.hidden = true;
-          if (mini) { syncCallName(); syncCallAv(); mini.hidden = false; }
+          if (mini) { syncCallName(); syncCallAv(); mini.hidden = false; liftMiniIntoSafeArea(); /* v3.26.x #137 显示时校正 */ }
         } else {
           if (mask) mask.hidden = false;
           if (cdEl) cdEl.hidden = true;
@@ -763,8 +910,15 @@
     } catch (e) {}
     try { if (!document.getElementById('page-home').hidden && window.__renderHomeCall) window.__renderHomeCall(); } catch (e) {}
   }
-  if (window.__mochiDataReady) { try { recoverCall(); } catch (e) {} }
-  else { try { document.addEventListener('mochi-restore-done', function () { try { recoverCall(); } catch (e) {} }); } catch (e) {} }
+  // #161：冷启动恢复——restore 完成后检查响铃挂起（3 分钟内重开浏览器 → 重新响铃可接听；
+  // resumeHeldCall 读后即清 + 写 {ts:0}，重复触发幂等无副作用）
+  function bootCallResume() {
+    try { recoverCall(); } catch (e) {}
+    setTimeout(function () { try { resumeHeldCall(); } catch (e) {} }, 1200);
+  }
+  if (window.__mochiDataReady) { try { bootCallResume(); } catch (e) {} }
+  else { try { document.addEventListener('mochi-restore-done', function () { try { bootCallResume(); } catch (e) {} }); } catch (e) {} }
+  setTimeout(function () { try { resumeHeldCall(); } catch (e) {} }, 20000); // 回填挂起设备兜底（幂等）
   setTimeout(() => {
     function scheduleCallCheck() {
       maybeIncoming();

@@ -135,6 +135,8 @@
     'out-bg': '#111111', 'out-ink': '#ffffff', 'in-bg': '#ffffff', 'in-ink': '#111111',
     'send-bg': '#111111', 'send-ink': '#ffffff', 'send-show': 'show',
     'font-size': '14px', 'bubble-size': '11px 14px',
+    // v3.28.x：对齐聊天美化——气泡边缘圆角 / 时间轴颜色 / 正在输入颜色
+    'bubble-radius': '18px', 'time-ink': '#111111', 'typing-ink': '#8a8a8a',
     'av-shape': 'circle', 'time-style': 'under-av',
     'bg': '', 'font': '', 'css': '',
     // v3.16.x：成员群聊昵称显示开关（on = 成员消息头像上方显示昵称，默认不显示）
@@ -159,6 +161,14 @@
     { label: '标准', value: '11px 14px' },
     { label: '宽松', value: '14px 18px' }
   ];
+  // v3.28.x：聊天气泡边缘（四角圆角大小）——与聊天美化对齐
+  const GC_BUBBLE_RADII = [
+    { label: '小圆角', value: '6px' },
+    { label: '标准', value: '12px' },
+    { label: '大圆角', value: '18px' },
+    { label: '特圆', value: '28px' }
+  ];
+  const GC_BUBBLE_RADIUS_DEFAULT = '18px';
   // 色板与聊天设置一致（气泡底色 / 文字色 / 发送按钮底）
   const GC_BUBBLE_BG = [
     { color: '#111111', label: '默认黑' }, { color: '#ffffff', label: '白色' }, { color: '#3a3a3a', label: '炭灰' },
@@ -178,7 +188,7 @@
   const gcBeautyStored = {};
   // v3.11.x：深色模式下未自定义配色键的默认值（浅色默认白气泡/黑字在内联变量上
   // 压过 dark.css 覆盖，是深色模式群聊白块+黑字的根源）；用户自定义过仍优先
-  const GC_DARK_DEFAULTS = { 'out-bg': '#3a3a3a', 'in-bg': '#2a2a2a', 'in-ink': '#f0f0f0', 'send-bg': '#f0f0f0', 'send-ink': '#111111' };
+  const GC_DARK_DEFAULTS = { 'out-bg': '#3a3a3a', 'in-bg': '#2a2a2a', 'in-ink': '#f0f0f0', 'send-bg': '#f0f0f0', 'send-ink': '#111111', 'time-ink': '#8a8a8a' };
   function gcBeautyStore() { return gcProfileStore(); }
   function gcBeautyLoad() {
     try {
@@ -239,7 +249,7 @@
   function gcColorWarnText(key) {
     const names = { 'out-bg': '我的气泡', 'in-bg': '联系人气泡' };
     const n = names[key] || '';
-    return n + '：文字与气泡颜色太接近，消息可能看不清，建议改深/改浅';
+    return n + '：文字与气泡颜色对比偏低，消息可能看不清（低于安全线时会自动换黑/白文字保证可读），建议改深/改浅';
   }
   // 群聊页局部字体（不污染全局 body/html）
   function applyGcFont() {
@@ -265,25 +275,42 @@
     if (old) old.remove();
     const css = gcBeautyGet('css');
     if (!css) return;
-    let out = css;
-    if (css.indexOf('{') < 0) {
+    let out = css, hint = null;
+    // v3.26.x #181：统一走 chat.js 的 mochiMapBubbleCss（别名扩充 + 未认出气泡类名时整包声明
+    // 兜底，修「上传网页模板气泡 CSS 后界面零变化」多机型反复问题；同单聊 applyCss）
+    if (window.mochiMapBubbleCss) {
+      const res = window.mochiMapBubbleCss(css, '#page-group-chat ');
+      out = res.out;
+      hint = res.hint;
+    } else if (css.indexOf('{') < 0) {
       out = '#page-group-chat .msg-out .msg-bubble{' + css + '!important;}' +
             '#page-group-chat .msg-in .msg-bubble{' + css + '!important;}';
-    } else {
-      out = css
-        .replace(/\.msg-out\b/g, '#page-group-chat .msg-out')
-        .replace(/\.msg-in\b/g, '#page-group-chat .msg-in')
-        .replace(/\.message-sent\b/g, '#page-group-chat .msg-out .msg-bubble')
-        .replace(/\.message-received\b/g, '#page-group-chat .msg-in .msg-bubble')
-        .replace(/\.mb\.self\b/g, '#page-group-chat .msg-out .msg-bubble')
-        .replace(/\.mb\.other\b/g, '#page-group-chat .msg-in .msg-bubble')
-        .replace(/\.bubble-self\b/g, '#page-group-chat .msg-out .msg-bubble')
-        .replace(/\.bubble-other\b/g, '#page-group-chat .msg-in .msg-bubble');
     }
     const st = document.createElement('style');
     st.id = 'gc-bubble-style';
     st.textContent = out;
     document.head.appendChild(st);
+    if (hint) setTimeout(() => { try { toast(hint); } catch (e) {} }, 50);
+  }
+  // FIX 2026-09-07 #223 群聊气泡对比度自愈（同单聊 chat-settings._ensureBubbleContrast）：
+  // 文字色与气泡色对比过低（用户自选低对比组合/导入美化方案）时注入高优先级覆盖样式强制
+  // 文字可见——对比度保护从「拒绝用户选色」改为「保证可读」，用户选的颜色保留生效
+  function gcEnsureContrast() {
+    const page = document.getElementById('page-group-chat');
+    if (!page) return;
+    let fix = document.getElementById('gc-contrast-fix');
+    const rules = [];
+    [['out', gcBeautyGet('out-bg'), gcBeautyGet('out-ink')], ['in', gcBeautyGet('in-bg'), gcBeautyGet('in-ink')]].forEach((p) => {
+      const ratio = gcContrast(p[2], p[1]);
+      if (ratio !== null && ratio < 1.5) {
+        const lum = gcColorLum(p[1]);
+        rules.push('#page-group-chat .msg-' + p[0] + ' .msg-bubble.msg-bubble{color:' + (lum !== null && lum >= 0.5 ? '#111111' : '#ffffff') + ' !important}');
+      }
+    });
+    if (rules.length) {
+      if (!fix) { fix = document.createElement('style'); fix.id = 'gc-contrast-fix'; document.head.appendChild(fix); }
+      fix.textContent = rules.join('\n');
+    } else if (fix) fix.remove();
   }
   // 应用群聊美化（CSS 变量在 #page-group-chat 上局部覆盖；默认值与聊天页默认一致）
   function applyGcBeauty() {
@@ -296,6 +323,10 @@
     page.style.setProperty('--msg-out-ink', g('out-ink'));
     page.style.setProperty('--chat-font-size', g('font-size'));
     page.style.setProperty('--chat-bubble-pad', g('bubble-size'));
+    // v3.28.x：对齐聊天美化——气泡边缘圆角 / 时间轴颜色 / 正在输入颜色
+    page.style.setProperty('--chat-bubble-radius', g('bubble-radius'));
+    page.style.setProperty('--msg-time-ink', g('time-ink'));
+    page.style.setProperty('--typing-ink', g('typing-ink'));
     page.style.setProperty('--send-bg', g('send-bg'));
     page.style.setProperty('--send-ink', g('send-ink'));
     page.style.setProperty('--msg-av-radius', g('av-shape') === 'square' ? '10px' : '50%');
@@ -317,6 +348,7 @@
     }
     applyGcFont();
     applyGcCss();
+    gcEnsureContrast();
   }
   gcBeautyLoad();
   applyGcBeauty();
@@ -398,7 +430,7 @@
     if (!run) return;
     const wait = G_PERSIST_MIN_GAP - (performance.now() - gLastPersistAt);
     if (wait > 0) { gPersistTimer = setTimeout(gRunPersist, wait); return; }
-    try { run(); gLastPersistAt = performance.now(); } catch (e) {}
+    try { Promise.resolve(run()).catch(function () {}); gLastPersistAt = performance.now(); } catch (e) {}
   }
   function gSchedulePersist(writer) {
     gPersistRun = writer;
@@ -410,9 +442,50 @@
     const run = gPersistRun;
     gPersistRun = null;
     gPersistTimer = null;
-    if (run) { try { run(); gLastPersistAt = performance.now(); } catch (e) {} }
+    if (run) { try { Promise.resolve(run()).catch(function () {}); gLastPersistAt = performance.now(); } catch (e) {} }
   }
-  function gcWriteMsgs() {
+  // v3.34.x #245 群聊媒体令牌化（对齐单聊 #142）：落盘前把消息里的 data:image 载荷
+  // 统一换成媒体池令牌 @@m:hash（内容寻址去重；渲染由 media-pool 文档级观察器解图，
+  // 池 GC 引用扫描已含群聊键 #186）。此前群聊每条表情/图片整段 base64 内联进消息数组，
+  // 消息无上限+每次落盘全量重写，数组一次比一次大，LS 配额超限后被静默吞掉只剩
+  // IDB 异步写。语音（data:audio）池暂不收、保持内联。令牌化失败/不支持环境回退原值。
+  async function gcNormalizeMedia() {
+    if (!window.mochiMediaTokenize) return;
+    const seen = new Map();
+    const collect = (v) => { if (typeof v === 'string' && v.indexOf('data:image/') === 0 && v.length >= 1024 && !seen.has(v)) seen.set(v, null); };
+    for (let i = 0; i < msgs.length; i++) {
+      const r = msgs[i];
+      if (!r) continue;
+      if (r.type === 'sticker' || r.type === 'image') collect(r.text);
+      if (r.parts && r.parts.length) r.parts.forEach(p => { if (p && p.k === 'img') collect(p.v); });
+      if (r.quote) {
+        if (typeof r.quote === 'string') collect(r.quote);
+        else if (r.quote.imgs && r.quote.imgs.length) r.quote.imgs.forEach(collect);
+      }
+    }
+    if (!seen.size) return;
+    await Promise.all(Array.from(seen.keys()).map(v =>
+      Promise.resolve(window.mochiMediaTokenize(v)).then(t => { seen.set(v, t || v); }).catch(() => {})
+    ));
+    const apply = (v) => { const t = seen.get(v); return (t && t !== v) ? t : v; };
+    for (let i = 0; i < msgs.length; i++) {
+      const r = msgs[i];
+      if (!r) continue;
+      if (r.type === 'sticker' || r.type === 'image') r.text = apply(r.text);
+      if (r.parts && r.parts.length) r.parts.forEach(p => { if (p && p.k === 'img') p.v = apply(p.v); });
+      if (r.quote) {
+        if (typeof r.quote === 'string') { if (seen.has(r.quote)) r.quote = apply(r.quote); }
+        else if (r.quote.imgs && r.quote.imgs.length) r.quote.imgs = r.quote.imgs.map(apply);
+      }
+    }
+  }
+  // quick=true（离页/切群保写）：跳过令牌化与池 flush 直接同步落盘——令牌化是真实异步
+  //（sha256+IDB 查池），unload 窗口内可能完不成导致丢写；池有独立的 hidden flush 兜底
+  async function gcWriteMsgs(quick) {
+    if (!quick) {
+      try { await gcNormalizeMedia(); } catch (e) {}
+      try { if (window.mochiMediaFlush) await window.mochiMediaFlush(); } catch (e) {} // #142：池先落盘，引用后落盘
+    }
     const data = JSON.stringify(msgs);
     const key = groupMsgKey(curGid);
     try { localStorage.setItem(key, data); } catch (e) {}
@@ -423,7 +496,7 @@
   }
   function saveNow() {
     gFlushPersistNow();
-    gcWriteMsgs();
+    gcWriteMsgs(true);
   }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') gFlushPersistNow(); });
   window.addEventListener('beforeunload', () => gFlushPersistNow());
@@ -434,6 +507,10 @@
     try {
       if (window.idbGet) {
         window.idbGet(key).then(v => {
+          // FIX 串群 #243：idbGet 异步回来时可能已切群/重进（本回调还挂在旧 key 上）——
+          // key 不再是当前群的键就整包丢弃；否则旧群数据会覆盖当前群 msgs 并被下次
+          // 保存回写进新群的存储键（A 群历史灌进 B 群）
+          if (key !== groupMsgKey(curGid)) return;
           if (v === undefined || v === null) return;
           try { const a = JSON.parse(v); if (Array.isArray(a) && a.length >= msgs.length) { msgs = a; renderAll(); } } catch (e) {}
         }).catch(() => {});
@@ -494,6 +571,8 @@
   let gcVoiceBtn = null;
   function gcPlayVoice(btn, src) {
     if (!src) return;
+    // 令牌 resilient：池令牌（现仅图片，语音日后若入池）内存命中即展开为真实地址
+    try { const ex = window.mochiMediaExpand && window.mochiMediaExpand(src); if (ex) src = ex; } catch (e) {}
     if (gcVoiceBtn === btn) { try { gcVoiceAudio.pause(); } catch (e) {} gcVoiceAudio = null; if (gcVoiceBtn) gcVoiceBtn.classList.remove('playing'); gcVoiceBtn = null; return; }
     if (gcVoiceBtn) { try { gcVoiceAudio.pause(); } catch (e) {} gcVoiceBtn.classList.remove('playing'); }
     const a = new Audio(src);
@@ -510,7 +589,13 @@
     a.addEventListener('error', stop);
     a.play().catch(stop);
   }
-  function renderMsg(rec, idx) {
+  // 放置一条消息 DOM——beforeEl 传锚点时插到其前（#246「查看更早」向顶部补历史），否则追加
+  function gcPlaceMsg(m, beforeEl) {
+    if (beforeEl && beforeEl.parentNode === body) body.insertBefore(m, beforeEl);
+    else body.appendChild(m);
+    pruneGcDom();
+  }
+  function renderMsg(rec, idx, beforeEl) {
     const m = document.createElement('div');
     m.className = 'msg ' + (rec.side === 'out' ? 'msg-out' : 'msg-in');
     if (idx === undefined) idx = msgs.length - 1;
@@ -534,16 +619,14 @@
     if (rec.special === 'poke') {
       m.className = 'msg-poke';
       m.innerHTML = '<span>' + escTxt(rec.text || '') + '</span>';
-      body.appendChild(m);
-      pruneGcDom();
+      gcPlaceMsg(m, beforeEl);
       return m;
     }
     // v3.26.x：决定结果系统消息（群聊里使用【帮我决定】/【多人决定】的结果，居中系统样式，同拍一拍）
     if (rec.special === 'system') {
       m.className = 'msg-poke';
       m.innerHTML = '<span>' + escTxtBr(rec.text || '') + '</span>';
-      body.appendChild(m);
-      pruneGcDom();
+      gcPlaceMsg(m, beforeEl);
       return m;
     }
     const quoteStr = rec.quote ? gcQuoteHtml(rec.quote) : '';
@@ -551,7 +634,10 @@
     if (rec.retracted) {
       // v3.10.x：补齐点击查看原消息（与聊天页 bindToggle 一致）——原仅显示提示文本，
       // 无 cursor:pointer 且未绑 onclick，用户反馈"群聊无法点击查看撤回的消息"。
-      b.dataset.orig = rec.orig || rec.text;
+      // FIX 撤回查看 #244：原 `rec.orig || rec.text` 在点击时 innerHTML 直出原始文本——
+      // 多行丢换行、图片/表情/语音点开整屏 base64、字卡含 HTML 会被当标签执行（注入）。
+      // 对齐单聊 chat.js retractMsg（撤回时存渲染快照 rec.orig）；无快照走安全回退。
+      b.dataset.orig = rec.orig || gcRetractFallbackHtml(rec);
       const who = rec.side === 'out' ? '我' : memberName(rec.cid);
       b.innerHTML = '<span style="opacity:.6;font-size:12px;cursor:pointer">' + who + '撤回了一条消息</span>';
       b.style.cursor = 'pointer';
@@ -627,16 +713,45 @@
           (label && label !== (rec.text || '') ? '<span>' + escTxt(label) + '</span>' : '') + '</div>';
       });
     }
-    body.appendChild(m);
-    pruneGcDom();
+    gcPlaceMsg(m, beforeEl); // #246：收发追加/历史前插统一走放置器
     return m;
   }
+  // v3.34.x #246 历史分页：进群只渲最近 RENDER_MAX 条（gcRenderStart=渲染窗口起点），
+  // 更早的历史点「查看更早的消息」按块向顶部补渲——此前 RENDER_MAX 只上不下，老消息
+  // 存了但界面永远看不到。插入按 scrollHeight 差值回补 scrollTop 保持视口不跳；
+  // 贴底跟随与 DOM 窗口裁剪逻辑不变（裁剪跳过分页按钮）
+  let gcRenderStart = 0;
+  const GC_EARLIER_CHUNK = 150;
   function renderAll() {
     body.innerHTML = '';
     const n = msgs.length;
-    const start = Math.max(0, n - RENDER_MAX);
-    for (let i = start; i < n; i++) renderMsg(msgs[i], i);
+    gcRenderStart = Math.max(0, n - RENDER_MAX);
+    if (gcRenderStart > 0) body.appendChild(gcEarlierBtn());
+    for (let i = gcRenderStart; i < n; i++) renderMsg(msgs[i], i);
     scrollToBottom();
+  }
+  function gcEarlierBtn() {
+    const d = document.createElement('div');
+    d.className = 'gc-earlier';
+    d.textContent = '查看更早的消息（还有 ' + gcRenderStart + ' 条）';
+    d.addEventListener('click', loadEarlier);
+    return d;
+  }
+  function gcSyncEarlierBtn() {
+    const btn = body.querySelector('.gc-earlier');
+    if (gcRenderStart <= 0) { if (btn) btn.remove(); return; }
+    if (btn) btn.textContent = '查看更早的消息（还有 ' + gcRenderStart + ' 条）';
+    else body.insertBefore(gcEarlierBtn(), body.firstElementChild);
+  }
+  function loadEarlier() {
+    if (gcRenderStart <= 0) return;
+    const newStart = Math.max(0, gcRenderStart - GC_EARLIER_CHUNK);
+    const anchor = body.querySelector('.gc-earlier') || body.firstElementChild;
+    const prevH = body.scrollHeight;
+    for (let i = newStart; i < gcRenderStart; i++) renderMsg(msgs[i], i, anchor);
+    gcRenderStart = newStart;
+    try { body.scrollTop += body.scrollHeight - prevH; } catch (e) {}
+    gcSyncEarlierBtn();
   }
   function scrollToBottom() { try { body.scrollTop = body.scrollHeight; } catch (e) {} }
   // v3.16.x：新消息自动跟底——收发消息后调用；用户正回看历史（离底 >150px）时不打扰，
@@ -658,7 +773,13 @@
       if (body.children.length <= GC_DOM_WINDOW) return;
       if (body.scrollHeight - body.scrollTop - body.clientHeight > 400) return; // 远离底部：在看历史
       let excess = body.children.length - GC_DOM_CUT;
-      while (excess-- > 0 && body.firstElementChild) body.firstElementChild.remove();
+      while (excess-- > 0) {
+        let el = body.firstElementChild;
+        if (!el) break;
+        if (el.classList && el.classList.contains('gc-earlier')) el = el.nextElementSibling; // 分页按钮不裁
+        if (!el) break;
+        el.remove();
+      }
     } catch (e) {}
   }
 
@@ -861,7 +982,9 @@
       const isOff = a ? a.isOff : (window.isDefaultCardOff || null);
       const catOn = a ? a.cat : (window.defaultCardCat || (() => true));
       if (dcfg.enabled !== false && useChat) {
-        if (catOn('main')) {
+        // v3.26.x #157：主字卡兜底语义对齐聊天页 getPool——只在自定义 text 池为空时并入，
+        // 概率混入交给 getDefaultCardsFor（dc-overall）；否则 4600+ 默认卡淹没自定义池
+        if (catOn('main') && text.length === 0) {
           const defGrps = (window.getDefaultCardGroups && window.getDefaultCardGroups('main')) || [];
           defGrps.forEach(g => {
             (g[1] || []).forEach(card => {
@@ -905,9 +1028,20 @@
         t = pick(pool.text) || FALLBACK_REPLIES[Math.floor(Math.random() * FALLBACK_REPLIES.length)];
       }
     }
-    if (type === 'text' && pool.kaomoji.length && hit(c['gc-kaomoji-prob'])) {
-      t += ' ' + pick(pool.kaomoji);
-    }
+if (type === 'text' && pool.kaomoji.length && hit(c['gc-kaomoji-prob'])) {
+t += ' ' + pick(pool.kaomoji);
+}
+// v3.26.x #163：文本回复按成员所在桌面混入默认字卡（同聊天页 genOneReply 的
+// getDefaultCards 覆盖语义，dc-overall-chat 概率+分类占比+各开关内部同源生效）——
+// 原群聊只有拍一拍走 getDefaultCardsFor，文本回复从不混默认字卡，成员桌面把
+// 默认概率调多高都只影响拍一拍
+if (type === 'text') {
+try {
+const st = window.storeFor ? window.storeFor(cid) : null;
+const defs = (st && window.getDefaultCardsFor) ? window.getDefaultCardsFor(st) : ((window.getDefaultCards && window.getDefaultCards()) || null);
+if (defs && defs.type === 'text' && defs.text) t = defs.text;
+} catch (e) {}
+}
     // 组合消息：文字 + 表情包/图片 附加到同一条（同聊天页 genOneReply）
     let parts = null;
     if (type === 'text') {
@@ -951,11 +1085,82 @@
   }
   function showTyping(name) { if (typingEl) { typingEl.textContent = (name || '成员') + ' 正在输入…'; typingEl.hidden = false; } }
   function hideTyping() { if (typingEl) typingEl.hidden = true; }
+  // ---- FIX 串群 #242：成员回复/撤回绑定来源群 ----
+  // 定时器在调度时捕获 curGid，落库一律写来源群；来源群仍是当前群才做 DOM 渲染/
+  // 音效/打字指示，否则静默写入该群存储（切回可见）。此前 msgs.push/saveMsgs 都在
+  // 定时器执行时刻读当前 curGid——发消息后切群，回复会写进新群（串群）且原群永久
+  // 丢回复；群已删除则丢弃（同删除群聊「消息一并删除」语义）。
+  function gcGroupAlive(gid) { return groups.some(g => g.id === gid); }
+  function gcReadGroupKey(gid) {
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem(groupMsgKey(gid)) || '[]'); } catch (e) {}
+    return Array.isArray(arr) ? arr : [];
+  }
+  function gcWriteGroupKey(gid, arr) {
+    const data = JSON.stringify(arr);
+    localStorage.setItem(groupMsgKey(gid), data);
+    try { if (window.idbSet) window.idbSet(groupMsgKey(gid), data); } catch (e) {}
+  }
+  // 投递一条回复到指定群：同群走原路径（渲染+音效），跨群只落存储。返回该消息在
+  // 来源群数组中的下标（供撤回定时器定位），失败返回 -1
+  function gcDeliverReply(gid, rec, sfx) {
+    if (!gcGroupAlive(gid)) return -1;
+    if (gid === curGid) {
+      msgs.push(rec);
+      saveMsgs();
+      renderMsg(rec, msgs.length - 1);
+      followGcBottom();
+      if (sfx && window.playSfx) window.playSfx(sfx);
+      return msgs.length - 1;
+    }
+    try {
+      const arr = gcReadGroupKey(gid);
+      arr.push(rec);
+      gcWriteGroupKey(gid, arr);
+      return arr.length - 1;
+    } catch (e) { return -1; }
+  }
+  // FIX 撤回查看 #244：无渲染快照时的安全回退（存量撤回记录/跨群撤回）——
+  // 媒体给占位、文本走转义，绝不 innerHTML 直出原始 rec.text
+  function gcRetractFallbackHtml(rec) {
+    const ph = (t) => '<span style="opacity:.6;font-size:12px">' + t + '</span>';
+    if (rec.type === 'image') return ph('[图片]');
+    if (rec.type === 'sticker') return ph('[表情包]');
+    if (rec.type === 'voice') return ph('[语音]');
+    if (rec.parts && rec.parts.length) {
+      const imgs = rec.parts.filter(p => p.k === 'img').length;
+      const txt = rec.parts.filter(p => p.k === 'text').map(p => p.v).join(' ');
+      return (imgs ? ph('[图片]') : '') +
+        (txt ? '<span style="opacity:.85;word-break:break-word">' + escTxtBr(txt) + '</span>' : '');
+    }
+    return '<span style="opacity:.85;word-break:break-word">' + escTxtBr(rec.text || '') + '</span>';
+  }
   // v3.9.x：单条成员消息撤回（标记 + 局部重渲染）
-  function retractGcMsg(idx) {
+  // FIX 串群 #242：带来源群 gid——不是当前群时落到该群存储，绝不写错群；
+  // FIX 撤回查看 #244：撤回前先存渲染快照 rec.orig（同单聊 chat.js retractMsg 语义），
+  // 点击查看用快照，不再回退直出原始文本
+  function retractGcMsg(idx, gid) {
+    if (gid !== undefined && gid !== curGid) {
+      try {
+        const arr = gcReadGroupKey(gid);
+        if (arr[idx] && !arr[idx].retracted) {
+          arr[idx].orig = gcRetractFallbackHtml(arr[idx]);
+          arr[idx].retracted = true;
+          gcWriteGroupKey(gid, arr);
+        }
+      } catch (e) {}
+      return;
+    }
     if (idx < 0 || idx >= msgs.length) return;
     const rec = msgs[idx];
     if (!rec || rec.retracted) return;
+    // 撤回快照防臃肿：媒体类记录（表情/图片/语音/含图组合）与超大快照（引用缩略图
+    // 已被观察器展开成 data:）不存 DOM 快照，走 gcRetractFallbackHtml 占位——
+    // 否则令牌化省下的空间被快照里的整段 base64 又吃回去
+    const mediaish = rec.type === 'sticker' || rec.type === 'image' || rec.type === 'voice' ||
+      (!!(rec.parts && rec.parts.length) && rec.parts.some(p => p && p.k === 'img'));
+    const el = mediaish ? null : body.querySelector('.msg[data-gc-idx="' + idx + '"] .msg-bubble');
+    rec.orig = (el && el.innerHTML.length <= 20000) ? el.innerHTML : gcRetractFallbackHtml(rec);
     rec.retracted = true;
     saveMsgs();
     const target = body.querySelector('.msg[data-gc-idx="' + idx + '"]');
@@ -966,34 +1171,32 @@
   }
   // v3.9.x：成员回复——按群聊回复设置：回复速度/条数/拍一拍/表情包/emoji/图片/语音/
   // 颜文字/引用/撤回（含撤回补发），与聊天页被动回复语义一致
-  function memberReply(cid, quoteText) {
+  function memberReply(cid, quoteText, gid) {
+    if (gid === undefined) gid = curGid; // FIX 串群 #242：未传时兜底当前群
     const c = gcCfg();
     const name = memberName(cid);
     const rsMin = Math.max(1, Number(c['gc-rs-min']) || 1);
     const rsMax = Math.max(rsMin, Number(c['gc-rs-max']) || rsMin);
     const delay = (rsMin + Math.random() * Math.max(1, rsMax - rsMin)) * 1000;
-    showTyping(name);
+    if (gid === curGid) showTyping(name);
     setTimeout(() => {
-      hideTyping();
+      if (gid === curGid) hideTyping();
       // 拍一拍分支（同聊天页：命中则不回文字，直接拍）
       if (hit(c['gc-touch-prob'])) {
         const rec = { side: 'in', cid: cid, name: name, text: gcPokeText(cid), special: 'poke', ts: Date.now() };
-        msgs.push(rec);
-        saveMsgs();
-        renderMsg(rec, msgs.length - 1);
-        followGcBottom();
-        if (window.playSfx) window.playSfx('in');
+        gcDeliverReply(gid, rec, 'in'); // FIX 串群 #242：落回来源群
         return;
       }
       // 回复条数（min/max 调反时兜底至少 1 条）
       const rpMin = Math.max(1, Number(c['gc-reply-min']) || 1);
       const rpMax = Math.max(rpMin, Number(c['gc-reply-max']) || 2);
-      const count = randInt(rpMin, rpMax);
+      // #167 同单聊：gc-py-en 是总开关，关闭时每个成员每条只回一条
+      const count = (c['gc-py-en'] === 1) ? randInt(rpMin, rpMax) : 1;
       // 本轮整体掷一次引用（只给第一条带引用，防多条连续引用同一句）
       const wantQuote = hit(c['gc-quote-prob']) && !!quoteText;
       for (let i = 0; i < count; i++) {
         setTimeout(() => {
-          hideTyping();
+          if (gid === curGid) hideTyping();
           (async () => {
           // v3.27.x：生成前先确保该成员字卡池就绪——成员桌面大键可能被启动回填
           // 挂起，同步读池是空库会让成员一直发 FALLBACK_REPLIES 兜底（上限 2.5s）
@@ -1014,21 +1217,16 @@
               if (window.addChatCount) window.addChatCount();
             } catch (e) {}
           }
-          msgs.push(rec);
-          saveMsgs();
-          renderMsg(rec, msgs.length - 1);
-          followGcBottom();
-          if (window.playSfx) window.playSfx('in');
-          if (i < count - 1) showTyping(name);
-          const myIdx = msgs.length - 1;
+          const myIdx = gcDeliverReply(gid, rec, 'in'); // FIX 串群 #242：落回来源群
+          if (i < count - 1 && gid === curGid) showTyping(name);
           // 撤回 + 撤回补发
           if (hit(c['gc-rc-prob'])) {
             setTimeout(() => {
-              retractGcMsg(myIdx);
+              retractGcMsg(myIdx, gid); // FIX 串群 #242：撤回落回来源群
               if (hit(c['gc-rc-refix'])) {
-                showTyping(name);
+                if (gid === curGid) showTyping(name);
                 setTimeout(() => {
-                  hideTyping();
+                  if (gid === curGid) hideTyping();
                   (async () => {
                   try { await gcHydrateWait(cid); } catch (e) {}
                   const rep2 = gcGenReply(cid, c);
@@ -1042,11 +1240,7 @@
                       }
                     } catch (e) {}
                   }
-                  msgs.push(rec2);
-                  saveMsgs();
-                  renderMsg(rec2, msgs.length - 1);
-                  followGcBottom();
-                  if (window.playSfx) window.playSfx('in');
+                  gcDeliverReply(gid, rec2, 'in'); // FIX 串群 #242：补发落回来源群
                   })();
                 }, 700);
               }
@@ -1059,6 +1253,7 @@
   }
   // v3.9.x：@ 的成员必定回复；其余成员按「每个联系人回复概率」独立掷骰，命中才回
   function scheduleReply(userText) {
+    const gid = curGid; // FIX 串群 #242：捕获调度时的群，回复/撤回一律落回发起群
     const members = getMembers();
     if (!members.length) return;
     const c = gcCfg();
@@ -1077,7 +1272,7 @@
     if (!targets.length) return;
     // 各成员独立排期回复（成员间错开更自然）
     targets.forEach((cid, i) => {
-      setTimeout(() => memberReply(cid, userText), i * (1200 + Math.random() * 1600));
+      setTimeout(() => memberReply(cid, userText, gid), i * (1200 + Math.random() * 1600));
     });
   }
 
@@ -1097,6 +1292,7 @@
     updateGroupName();
     loadMsgs();
     renderAll();
+    hideTyping(); // FIX 串群 #242 家族：打字指示器全局共享，进群清掉其他群残留
     syncGcInputBtns(); // 进入群聊时按当前桌面设置刷新语音/继续说/批量按钮显隐
   }
   if (backBtn) backBtn.addEventListener('click', () => {
@@ -1230,6 +1426,7 @@
     saveCurGid();
     msgs = [];
     loadMsgs();
+    hideTyping(); // FIX 串群 #242 家族：切群清掉上一群打字指示残留
     refreshGroupViews();
     try { renderGroupsPanel(); } catch (e) {}
   }
@@ -1453,6 +1650,44 @@
   }
   function renderMainSettingsView() {
     const esc = escapeHtml;
+    // v3.28.x：群聊回复 stepper（读/写 reply-settings.js 的 gc-* 全局键，生效于全部联系人）
+    // 复用全站 .stepper/.stp-* 样式与交互语义（与回复设置页一致），作用于群聊设置面板内
+    const gcStepperRow = (label, k, min, max, step) => {
+      const gcfg = (window.groupChatCfg ? window.groupChatCfg() : {}) || {};
+      const row = document.createElement('div');
+      row.className = 'gc-set-stepper';
+      row.innerHTML =
+        '<span class="txt">' + escapeHtml(label) + '</span>' +
+        '<div class="stepper" data-k="' + k + '" data-min="' + min + '" data-max="' + (Number.isFinite(max) ? max : '') + '" data-step="' + step + '">' +
+          '<button class="stp-min">−</button>' +
+          '<input class="stp-val" inputmode="decimal" value="' + (gcfg[k] !== undefined ? gcfg[k] : (min || 0)) + '">' +
+          '<button class="stp-max">+</button>' +
+        '</div>';
+      const st = row.querySelector('.stepper');
+      const val = st.querySelector('.stp-val');
+      const mn = Number.isFinite(min) ? min : 0;
+      const mx = Number.isFinite(max) ? max : Infinity;
+      const sp = Number(step) || 1;
+      const fmt = (v) => sp < 1 ? Number(v).toFixed(2) : String(Math.round(Number(v)));
+      const save = (v) => { try { if (window.saveReplyCfg) window.saveReplyCfg(k, v); } catch (e) {} };
+      const bump = (dir) => {
+        let v = parseFloat(val.value); if (!isFinite(v)) v = mn;
+        v = dir > 0 ? Math.min(mx, v + sp) : Math.max(mn, v - sp);
+        val.value = fmt(v); save(val.value);
+      };
+      st.querySelector('.stp-min').addEventListener('click', () => bump(-1));
+      st.querySelector('.stp-max').addEventListener('click', () => bump(1));
+      val.addEventListener('change', () => {
+        let v = parseFloat(val.value); if (!isFinite(v)) v = mn;
+        v = Math.max(mn, Math.min(mx, v));
+        v = Math.round(v / sp) * sp; // 就近归整到步长（prob=5 时 42→40，与回复设置页 stepper 一致）
+        val.value = fmt(v); save(val.value);
+      });
+      val.addEventListener('blur', () => {
+        const v = parseFloat(val.value); if (!isFinite(v)) { val.value = fmt(mn); save(val.value); }
+      });
+      return row;
+    };
     const item = (key, curName, curAv, deskName) => {
       const row = document.createElement('div');
       row.className = 'gc-set-item';
@@ -1511,6 +1746,18 @@
       ], 'off');
     });
     settingsBody.appendChild(nmRow);
+    // —— 群聊回复（v3.28.x：全局生效于全部联系人，与回复设置页） ——
+    const tR = document.createElement('div');
+    tR.className = 'gc-set-title';
+    tR.textContent = '群聊回复';
+    settingsBody.appendChild(tR);
+    settingsBody.appendChild(gcStepperRow('每个联系人回复概率 %', 'gc-prob', 0, 100, 5));
+    settingsBody.appendChild(gcStepperRow('回复速度最短（秒）', 'gc-rs-min', 1, 60, 1));
+    settingsBody.appendChild(gcStepperRow('回复速度最长（秒）', 'gc-rs-max', 2, Infinity, 1));
+    const rNote = document.createElement('div');
+    rNote.className = 'gc-set-note';
+    rNote.textContent = '这里的回复概率与速度对所有群聊成员统一生效（全局）；完整的每项概率/条数/开关在「设置 → 回复设置 → 群聊被动回复」里调整。';
+    settingsBody.appendChild(rNote);
     // —— 美化聊天入口（v3.9.x） ——
     const bRow = document.createElement('div');
     bRow.className = 'gc-set-item gc-set-link';
@@ -1551,13 +1798,11 @@
     window.openModal(title, '', (v) => {
       const color = (typeof v === 'number' && swatches[v]) ? swatches[v].color : v;
       if (!color) return;
-      const prev = gcBeautyGet(key);
+      // FIX 2026-09-07 #223 群聊颜色一改就恢复：原对比度保护在选色后立即回滚——粉/浅色
+      // 气泡配默认白字、深色文字配默认黑底，全部对比度 < 2.2 被拒，用户怎么选都会弹回
+      // 旧色（多机型用户报障，与机型无关）。改为接受所选颜色，可读性由 applyGcBeauty
+      // 尾部 gcEnsureContrast 自愈兜底（方案同单聊 chat-settings._ensureBubbleContrast）。
       gcBeautySet(key, color);
-      // 对比度保护：文字/气泡同色系 → 回滚并提示（防黑底黑字）
-      if (gcColorPairBad(key)) {
-        gcBeautySet(key, prev);
-        toast('已恢复：该颜色与气泡太接近，消息会看不清');
-      }
     }, { colorPicker: true, color: cur, swatches: swatches });
   }
   function pickGcPills(key, title, pills, def) {
@@ -1625,6 +1870,26 @@
       gcBeautySet('bubble-size', v);
       document.getElementById('tc-mask').hidden = true;
       toast('气泡框大小已应用');
+    });
+  }
+  // v3.28.x：聊天气泡边缘（四角圆角大小）——滑块自由调节 + 预设胶囊，实时预览（对齐聊天美化）
+  function pickGcBubbleRadius() {
+    if (!window.openModal) return;
+    const page = document.getElementById('page-group-chat');
+    const curStr = gcBeautyGet('bubble-radius') || GC_BUBBLE_RADIUS_DEFAULT;
+    const curNum = (parseInt(curStr, 10) || 0);
+    window.openModal('聊天气泡边缘圆角', '', (v) => {
+      const px = typeof v === 'number' ? v : (parseInt(v, 10) || 0);
+      gcBeautySet('bubble-radius', px + 'px');
+    }, {
+      noInput: true,
+      slider: {
+        min: 0, max: 40, step: 1, value: Math.max(0, Math.min(40, curNum)),
+        label: '拖动调整气泡圆角', unit: 'px', preview: true,
+        onChange: (val) => { if (page) page.style.setProperty('--chat-bubble-radius', val + 'px'); }
+      },
+      pills: GC_BUBBLE_RADII,
+      pill: curStr
     });
   }
   // 群聊字体（上传 / 名字，作用域仅群聊页）
@@ -1743,10 +2008,337 @@
       { label: '圆形', value: 'circle' }, { label: '方形', value: 'square' }
     ], 'circle'));
     add('时间轴样式', (GC_BEAUTY_STYLES.find(s => s.value === g('time-style')) || {}).label || '头像下方', () => pickGcPills('time-style', '时间轴样式', GC_BEAUTY_STYLES, 'under-av'));
+    // v3.28.x：对齐聊天美化——气泡边缘圆角 / 时间轴颜色 / 正在输入颜色
+    add('气泡边缘圆角', (GC_BUBBLE_RADII.find(p => p.value === g('bubble-radius')) || {}).label || (g('bubble-radius') === '0px' ? '方形' : g('bubble-radius')), () => pickGcBubbleRadius());
+    add('时间轴颜色', '默认 ' + g('time-ink'), () => pickGcColor('time-ink', '时间轴颜色', GC_INK_COLORS));
+    add('正在输入颜色', '默认 ' + g('typing-ink'), () => pickGcColor('typing-ink', '正在输入颜色', GC_INK_COLORS));
     // —— 字体与样式 ——
     gtitle('字体与样式');
     add('群聊字体', g('font') ? (g('font').indexOf('data:') === 0 ? '已上传' : g('font')) : '默认', () => pickGcFont());
     add('气泡 CSS', g('css') ? '已设置' : '默认', () => pickGcCss());
+    // —— 美化方案（v3.28.x：对齐聊天美化的保存/应用/导出/导入） ——
+    gtitle('美化方案');
+    add('保存当前为美化方案', '', () => window.saveGcBeautyScheme());
+    add('美化方案管理', '(保存/应用/改名/删除/导出/导入)', () => window.openGcBeautySchemes());
+  }
+
+  // ================= 群聊美化方案（v3.28.x：保存/应用/改名/删除/导出/导入） =================
+  // 与聊天美化方案同语义，键为 gc-beauty 的各子键，存储于全局命名空间（所有桌面通用）
+  const GC_SCHEMES_KEY = 'gc-beauty-schemes';
+  const GC_BEAUTY_KEYS = [
+    'bg', 'css', 'font', 'font-size', 'bubble-size', 'bubble-radius',
+    'av-shape', 'time-style', 'time-ink', 'typing-ink',
+    'out-bg', 'out-ink', 'in-bg', 'in-ink', 'send-bg', 'send-ink', 'send-show'
+  ];
+  const gcSchemesStore = () => { try { return gcProfileStore(); } catch (e) { return null; } };
+  const getGcSchemes = () => {
+    try { const s = gcSchemesStore(); const a = JSON.parse((s && s.get(GC_SCHEMES_KEY)) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  };
+  const saveGcSchemesList = (arr) => { try { const s = gcSchemesStore(); if (s) s.set(GC_SCHEMES_KEY, JSON.stringify(arr)); } catch (e) {} };
+  const collectGcBeauty = () => {
+    const data = {};
+    GC_BEAUTY_KEYS.forEach(k => { const v = gcBeautyGet(k); if (v !== '' && v !== null && v !== undefined) data[k] = v; });
+    return data;
+  };
+  const applyGcBeautyData = (data) => {
+    GC_BEAUTY_KEYS.forEach(k => { if (data[k] !== undefined) try { gcBeautySet(k, data[k]); } catch (e) {} });
+  };
+  window.collectGcBeauty = collectGcBeauty;
+  window.applyGcBeautyData = applyGcBeautyData;
+  function gcSchemeModalEl() {
+    let m = document.getElementById('gc-beauty-scheme-manager');
+    if (!m) {
+      m = document.createElement('div'); m.id = 'gc-beauty-scheme-manager'; m.hidden = true;
+      m.style.cssText = 'position:fixed;inset:0;z-index:89;align-items:center;justify-content:center;background:rgba(0,0,0,.4)';
+      document.body.appendChild(m);
+      m.addEventListener('click', (e) => { if (e.target === m) { m.style.display = 'none'; m.hidden = true; } });
+    }
+    return m;
+  }
+  function hideGcSchemeModal(m) { if (m) { m.style.display = 'none'; m.hidden = true; } }
+  function applyGcScheme(idx, m) {
+    const s = getGcSchemes()[idx];
+    if (!s || !window.openModal) return;
+    const ctl = window.openModal('应用方案「' + s.name + '」？', '', (v) => {
+      if (v !== 'ok') return;
+      applyGcBeautyData(s.data || {});
+      hideGcSchemeModal(m);
+      toast('已应用「' + s.name + '」，群聊立即生效');
+    }, { noInput: true, staticText: '将覆盖全部联系人桌面的群聊美化设置，立即生效', pills: [{ label: '应用', value: 'ok' }] });
+    if (ctl && ctl.pills) ctl.pills([{ label: '应用', value: 'ok' }], 'ok');
+  }
+  function deleteGcScheme(idx, m) {
+    const s = getGcSchemes()[idx];
+    if (!s || !window.openModal) return;
+    const ctl = window.openModal('删除方案「' + s.name + '」？', '', (v) => {
+      if (v !== 'ok') return;
+      const list = getGcSchemes();
+      list.splice(idx, 1);
+      saveGcSchemesList(list);
+      toast('已删除方案');
+      window.openGcBeautySchemes();
+    }, { noInput: true, staticText: '删除后不可恢复', pills: [{ label: '删除', value: 'ok' }] });
+    if (ctl && ctl.pills) ctl.pills([{ label: '删除', value: 'ok' }], 'ok');
+  }
+  const gcMkBtn = (label, css, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = css;
+    b.addEventListener('click', fn);
+    return b;
+  };
+  // 方案缩略图（与聊天美化同款迷你气泡预览）
+  function gcSchemeThumb(data) {
+    data = data || {};
+    const inBg = data['in-bg'] || '#ffffff';
+    const inInk = data['in-ink'] || '#111111';
+    const outBg = data['out-bg'] || '#111111';
+    const outInk = data['out-ink'] || '#ffffff';
+    const r = (parseInt(data['bubble-radius'] || '18px', 10) || 18) / 2;
+    const tl = Math.max(0, Math.min(9, Math.round(r)));
+    const bg = data['bg'] || '';
+    const hasCss = !!data['css'];
+    const wall = bg
+      ? '<div style="position:absolute;inset:0;background-image:url(&quot;' + bg + '&quot;);background-size:cover;background-position:center;opacity:.4"></div>'
+      : '';
+    const cssChip = hasCss
+      ? '<div style="position:absolute;left:5px;bottom:4px;font-size:9px;color:#fff;background:rgba(0,0,0,.5);padding:1px 5px;border-radius:5px">CSS</div>'
+      : '';
+    return '' +
+      '<div style="position:relative;width:100%;height:64px;border-radius:9px;overflow:hidden;background:#e6e9ee;display:flex;align-items:center;padding:8px 10px;box-sizing:border-box;gap:5px">' +
+      wall +
+      '<div style="position:relative;align-self:flex-end;padding:4px 8px;border-radius:' + tl + 'px;font-size:10px;line-height:1.2;color:' + inInk + ';background:' + inBg + ';box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:56%">对方</div>' +
+      '<div style="margin-left:auto;position:relative;align-self:flex-start;padding:4px 8px;border-radius:' + tl + 'px;font-size:10px;line-height:1.2;color:' + outInk + ';background:' + outBg + ';box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:56%">我的</div>' +
+      cssChip +
+      '</div>';
+  }
+  function gcBeautySummary(data) {
+    data = data || {};
+    const out = [];
+    const inBg = data['in-bg'], outBg = data['out-bg'];
+    if (inBg || outBg) out.push('气泡色 ' + (inBg || '默认') + ' / ' + (outBg || '默认'));
+    const rad = data['bubble-radius'] || '18px';
+    const rn = GC_BUBBLE_RADII.find(p => p.value === rad);
+    out.push('圆角 ' + (rn ? rn.label : rad));
+    const fs = data['font-size'] || '14px';
+    const fnl = GC_FONT_SIZES.find(p => p.value === fs);
+    out.push('字号 ' + (fnl ? fnl.label : fs));
+    if (data['css']) out.push('自定义CSS');
+    if (data['bg']) out.push('壁纸');
+    const av = data['av-shape'];
+    if (av) out.push('头像 ' + (av === 'square' ? '方形' : '圆形'));
+    return out;
+  }
+  function gcSaveModalEl() {
+    let m = document.getElementById('gc-beauty-save-modal');
+    if (!m) {
+      m = document.createElement('div'); m.id = 'gc-beauty-save-modal'; m.hidden = true;
+      m.style.cssText = 'position:fixed;inset:0;z-index:90;align-items:center;justify-content:center;background:rgba(0,0,0,.4);display:none';
+      document.body.appendChild(m);
+      m.addEventListener('click', (e) => { if (e.target === m) { m.style.display = 'none'; m.hidden = true; } });
+    }
+    return m;
+  }
+  window.saveGcBeautyScheme = function () {
+    const x = gcSaveModalEl();
+    x.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'box-sizing:border-box;width:min(84vw,340px);max-height:84vh;overflow-y:auto;background:var(--card-bg,#fff);color:var(--ink,#111);border-radius:16px;padding:16px;box-shadow:0 14px 40px rgba(0,0,0,.25)';
+    const hd = document.createElement('div');
+    hd.style.cssText = 'font-size:15px;font-weight:700;text-align:center;margin-bottom:12px';
+    hd.textContent = '保存当前为群聊美化方案';
+    const data = collectGcBeauty();
+    const pv = document.createElement('div');
+    pv.innerHTML = gcSchemeThumb(data);
+    const sub = document.createElement('div');
+    sub.style.cssText = 'font-size:10.5px;color:var(--muted,#999);margin:8px 0 6px';
+    sub.textContent = '正在保存的当前设置：';
+    const sum = document.createElement('div');
+    sum.style.cssText = 'display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px';
+    const chips = gcBeautySummary(data);
+    if (!chips.length) { const e = document.createElement('span'); e.textContent = '以上传壁纸/气泡等设置为主'; e.style.cssText = 'font-size:10.5px;color:var(--muted,#999)'; sum.appendChild(e); }
+    else chips.forEach(c => { const el = document.createElement('span'); el.textContent = c; el.style.cssText = 'font-size:10.5px;color:var(--muted,#666);background:var(--card-soft,#f2f3f5);border:1px solid var(--card-border,#eee);padding:2px 8px;border-radius:999px'; sum.appendChild(el); });
+    const inp = document.createElement('input');
+    inp.placeholder = '例如：简约白、情侣粉气泡…'; inp.maxLength = 20;
+    inp.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 11px;font-size:13px;border:1px solid var(--card-border,#ddd);border-radius:9px;background:var(--bg-b,#fff);color:var(--ink,#111)';
+    const act = document.createElement('div');
+    act.style.cssText = 'display:flex;gap:8px;margin-top:13px;justify-content:flex-end';
+    const cancel = gcMkBtn('取消', 'font-size:12.5px;padding:7px 14px;border:1px solid var(--card-border,#eee);border-radius:9px;background:var(--btn-cancel-bg,#fafafa);color:var(--btn-cancel-ink,#555)', () => { x.style.display = 'none'; x.hidden = true; });
+    const ok = gcMkBtn('保存方案', 'font-size:12.5px;padding:7px 14px;border:none;border-radius:9px;background:var(--ink,#111);color:#fff', () => {
+      const name = (inp.value || '').trim();
+      if (!name) { inp.style.borderColor = '#e05a5a'; return; }
+      const list = getGcSchemes();
+      list.push({ name, time: Date.now(), data });
+      saveGcSchemesList(list);
+      x.style.display = 'none'; x.hidden = true;
+      toast('已保存方案「' + name + '」，所有桌面通用');
+      const m = document.getElementById('gc-beauty-scheme-manager');
+      if (m && !m.hidden) window.openGcBeautySchemes();
+    });
+    act.appendChild(cancel); act.appendChild(ok);
+    wrap.appendChild(hd); wrap.appendChild(pv); wrap.appendChild(sub); wrap.appendChild(sum); wrap.appendChild(inp); wrap.appendChild(act);
+    x.appendChild(wrap);
+    x.style.display = 'flex'; x.hidden = false;
+    setTimeout(() => { try { inp.focus(); } catch (e) {} }, 60);
+  };
+  // 群聊方案预览——暂存当前群聊美化 → 应用所选方案（即时生效，可还原）
+  let gcPreviewBackup = null;
+  function gcPreviewBarEl() {
+    let bar = document.getElementById('gc-beauty-preview-bar');
+    if (!bar) {
+      bar = document.createElement('div'); bar.id = 'gc-beauty-preview-bar';
+      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:96;margin:12px;padding:12px 14px;background:var(--card-bg,#fff);color:var(--ink,#111);border:1px solid var(--card-border,#eee);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);display:none;align-items:center;gap:10px';
+      document.body.appendChild(bar);
+    }
+    return bar;
+  }
+  function gcStartPreview(s, m) {
+    if (!s) return;
+    gcPreviewBackup = collectGcBeauty();
+    hideGcSchemeModal(m);
+    applyGcBeautyData(s.data || {});
+    const bar = gcPreviewBarEl();
+    bar.innerHTML = '';
+    const tx = document.createElement('div'); tx.style.flex = '1'; tx.style.fontSize = '13px';
+    tx.innerHTML = '正在预览「<b>' + s.name + '</b>」<div style="font-size:11px;color:var(--muted,#999)">去群聊页查看效果，点「使用」保存 / 「还原」恢复</div>';
+    const re = gcMkBtn('还原', 'font-size:12px;padding:6px 12px;border:1px solid var(--card-border,#eee);border-radius:8px;background:var(--btn-cancel-bg,#fafafa);color:var(--btn-cancel-ink,#555)', () => {
+      if (gcPreviewBackup) applyGcBeautyData(gcPreviewBackup);
+      gcPreviewBackup = null; bar.style.display = 'none'; toast('已还原');
+    });
+    const keep = gcMkBtn('使用这个方案', 'font-size:12px;padding:6px 12px;border:none;border-radius:8px;background:var(--ink,#111);color:var(--bg-b,#fff)', () => {
+      gcPreviewBackup = null; bar.style.display = 'none'; toast('已应用「' + s.name + '」');
+    });
+    bar.appendChild(tx); bar.appendChild(re); bar.appendChild(keep);
+    bar.style.display = 'flex';
+  }
+  function renameGcScheme(idx, m) {
+    const list = getGcSchemes();
+    const s = list[idx];
+    if (!s || !window.openModal) return;
+    const ctl = window.openModal('编辑方案名称', s.name, (name) => {
+      name = (name || '').trim();
+      if (!name) { ctl.hint('名称不能为空'); ctl.stay(); return; }
+      s.name = name; saveGcSchemesList(list); toast('已重命名');
+      window.openGcBeautySchemes();
+    }, { maxlength: 20, placeholder: '输入方案名称' });
+  }
+  function gcSchemeExport() {
+    const schemes = getGcSchemes();
+    const doExport = (data) => {
+      const json = JSON.stringify(data);
+      if (!window.openModal) { toast('导出失败'); return; }
+      const d = new Date(); const p2 = (n) => (n < 10 ? '0' : '') + n;
+      const fname = 'mochi群聊美化方案-' + d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + '.json';
+      window.openModal('导出群聊美化方案', '', (v) => {
+        if (v === 'file') {
+          if (window.mochiExportFile) { window.mochiExportFile(json, fname, 'mochi群聊美化方案'); return; }
+          try {
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = fname;
+            document.body.appendChild(a); a.click();
+            setTimeout(() => { try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+            toast('已导出群聊美化方案文件');
+          } catch (e) { toast('导出文件失败'); }
+        } else if (v === 'text') {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(json).then(() => toast('已复制到剪贴板，发给对方粘贴导入')).catch(() => toast('复制失败，请改用导出文件'));
+          } else { toast('剪贴板不可用，请改用导出文件'); }
+        }
+      }, {
+        noInput: true,
+        staticText: '选择导出方式：\n· 导出文件：自动弹分享/保存框（iPhone 主屏安装时用这个），不支持时确认后下载\n· 复制文字：复制配置文本，发给对方粘贴导入',
+        pills: [
+          { label: '导出文件', value: 'file' },
+          { label: '复制文字', value: 'text' },
+        ],
+      });
+    };
+    if (!schemes.length || !window.openModal) { doExport(collectGcBeauty()); return; }
+    const pills = [{ label: '当前设置', value: 'current' }]
+      .concat(schemes.map((s, i) => ({ label: s.name || ('方案' + (i + 1)), value: 'sch_' + i })));
+    window.openModal('导出群聊美化方案', '', (v) => {
+      let data;
+      if (v && v.indexOf('sch_') === 0) {
+        const i = parseInt(String(v).slice(4), 10);
+        const s = getGcSchemes()[i];
+        if (!s) { toast('未找到该方案'); return; }
+        data = s.data || {};
+      } else {
+        data = collectGcBeauty();
+      }
+      doExport(data);
+    }, { noInput: true, staticText: '选择要导出的群聊美化方案：\n· 当前设置：导出当前正在使用的群聊美化\n· 已保存方案：导出对应方案（含气泡/壁纸/字体）', pills: pills });
+  }
+  function gcSchemeImport() {
+    if (!window.openModal) return;
+    window.openModal('导入群聊美化方案', '', (v) => {
+      if (!v || !v.trim()) return;
+      try {
+        const data = JSON.parse(v.trim());
+        if (typeof data !== 'object' || Array.isArray(data)) { toast('格式错误'); return; }
+        applyGcBeautyData(data);
+        toast('已导入，群聊立即生效');
+        window.openGcBeautySchemes();
+      } catch (e) { toast('解析失败，请检查文本'); }
+    }, { textarea: true, textareaPlaceholder: '粘贴对方导出的群聊美化方案文本，或点下方「从文件导入」选择 .json 文件', txtImport: true });
+  }
+  window.openGcBeautySchemes = function () {
+    const m = gcSchemeModalEl();
+    m.innerHTML = '';
+    const box = document.createElement('div');
+    box.style.cssText = 'width:min(92vw,420px);max-height:80vh;display:flex;flex-direction:column;background:var(--card-bg,#fff);color:var(--ink,#111);border-radius:16px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,.2)';
+    const head = document.createElement('div');
+    head.innerHTML = '<div style="font-size:16px;font-weight:600;margin-bottom:4px">群聊美化方案</div><div style="font-size:12px;color:var(--muted,#888);margin-bottom:12px">方案在所有联系人桌面通用（含气泡颜色/CSS、背景图、字体、圆角、时间轴等），点「应用」一键切换群聊外观</div>';
+    box.appendChild(head);
+    const list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-direction:column;gap:8px;margin-bottom:12px;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;flex:1;min-height:0';
+    const schemes = getGcSchemes();
+    if (!schemes.length) {
+      const empty = document.createElement('div');
+      empty.innerHTML = '<div style="font-size:13px;color:var(--muted,#999);text-align:center;padding:20px 0">还没有保存的群聊美化方案<br>先点下方「保存当前为方案」</div>';
+      list.appendChild(empty);
+    }
+    schemes.forEach((s, i) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--card-border,#eee);border-radius:10px';
+      const th = document.createElement('div');
+      th.innerHTML = gcSchemeThumb(s.data || {});
+      row.appendChild(th);
+      const nm = document.createElement('div');
+      const t = new Date(s.time || Date.now());
+      const ds = (t.getMonth() + 1) + '-' + t.getDate();
+      nm.innerHTML = '<div style="font-size:14px;font-weight:600;word-break:break-all">' + s.name + '</div><div style="font-size:11px;color:var(--muted,#999)">保存于 ' + ds + '</div>';
+      row.appendChild(nm);
+      const btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;align-items:center;gap:7px;flex-wrap:wrap';
+      btns.appendChild(gcMkBtn('预览', 'font-size:12px;padding:4px 10px;border:1px solid var(--card-border,#ddd);border-radius:8px;background:var(--btn-cancel-bg,#fafafa);color:var(--ink,#111)', () => gcStartPreview(s, m)));
+      btns.appendChild(gcMkBtn('应用', 'font-size:12px;padding:4px 10px;border:none;border-radius:8px;background:var(--ink,#111);color:var(--bg-b,#fff)', () => applyGcScheme(i, m)));
+      btns.appendChild(gcMkBtn('改名', 'font-size:12px;padding:4px 10px;border:1px solid var(--card-border,#ddd);border-radius:8px;background:var(--btn-cancel-bg,#fafafa);color:var(--ink,#111)', () => renameGcScheme(i, m)));
+      btns.appendChild(gcMkBtn('删除', 'font-size:12px;padding:4px 10px;border:1px solid rgba(163,45,45,.35);border-radius:8px;background:var(--danger-soft,#fff5f5);color:var(--danger-ink,#a32d2d)', () => deleteGcScheme(i, m)));
+      row.appendChild(btns);
+      list.appendChild(row);
+    });
+    box.appendChild(list);
+    const opera = document.createElement('div');
+    opera.style.cssText = 'display:flex;gap:8px;margin-bottom:8px';
+    const exBtn = gcMkBtn('导出方案', 'flex:1;padding:10px;border:1px solid var(--card-border,#ddd);border-radius:10px;background:var(--btn-cancel-bg,#fafafa);color:var(--ink,#111);font-size:13px;font-weight:600', () => gcSchemeExport());
+    const imBtn = gcMkBtn('导入方案', 'flex:1;padding:10px;border:1px solid var(--card-border,#ddd);border-radius:10px;background:var(--btn-cancel-bg,#fafafa);color:var(--ink,#111);font-size:13px;font-weight:600', () => gcSchemeImport());
+    opera.appendChild(exBtn); opera.appendChild(imBtn);
+    box.appendChild(opera);
+    const save = document.createElement('button');
+    save.textContent = '+ 保存当前为方案';
+    save.style.cssText = 'width:100%;padding:12px;border:none;border-radius:10px;background:var(--ink,#111);color:var(--bg-b,#fff);font-size:14px;font-weight:600';
+    save.addEventListener('click', () => { window.saveGcBeautyScheme(); });
+    box.appendChild(save);
+    const close = document.createElement('button');
+    close.textContent = '关闭';
+    close.style.cssText = 'width:100%;margin-top:8px;padding:10px;border:1px solid var(--card-border,#eee);border-radius:10px;background:var(--btn-cancel-bg,#fafafa);color:var(--btn-cancel-ink,#555)';
+    close.addEventListener('click', () => hideGcSchemeModal(m));
+    box.appendChild(close);
+    m.appendChild(box);
+    m.style.display = 'flex'; m.hidden = false;
   }
   if (settingsClose) settingsClose.addEventListener('click', () => { if (settingsPanel) settingsPanel.hidden = true; });
   if (settingsPanel) settingsPanel.addEventListener('click', (e) => { if (e.target === settingsPanel) settingsPanel.hidden = true; });
@@ -1786,6 +2378,7 @@
   }
   // 「继续说」：和聊天页 continueChat 同语义——强制让成员回复（无 @ 时随机 1-2 个，不按回复概率过滤）
   function gcContinueSay() {
+    const gid = curGid; // FIX 串群 #242：同 scheduleReply 绑定来源群
     const members = getMembers();
     if (!members.length) return;
     const mentioned = [];
@@ -1797,7 +2390,7 @@
       ? mentioned.slice()
       : members.slice(0, Math.max(1, Math.min(2, members.length))).map(m => m.id);
     chosen.forEach((cid, i) => {
-      setTimeout(() => memberReply(cid, ''), i * (1200 + Math.random() * 1600));
+      setTimeout(() => memberReply(cid, '', gid), i * (1200 + Math.random() * 1600));
     });
     if (window.playSfx) window.playSfx('in');
   }
@@ -1839,7 +2432,21 @@
     if (window.playSfx) window.playSfx('out');
     scheduleReply('');
   }
-  if (gcContinueBtn) gcContinueBtn.addEventListener('click', (e) => { e.stopPropagation(); gcContinueSay(); });
+  // #152：与聊天页 chat-continue-btn 同款防吞——安卓键盘收起叠着手势时输入栏位移，
+  // 合成 click 二次命中测试落错元素（无报错无回复）；触摸 pointerdown 按下即触发 +
+  // 1.2s 防重入挡合成 click 双触发；鼠标仍走 click。stopPropagation 语义保持原样
+  //（点按钮不让 document 级外点关闭逻辑收面板）。
+  let _gcCsFiredAt = 0;
+  function gcCsFireContinue() {
+    const now = Date.now();
+    if (now - _gcCsFiredAt < 1200) return;
+    _gcCsFiredAt = now;
+    gcContinueSay();
+  }
+  if (gcContinueBtn) {
+    gcContinueBtn.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') return; gcCsFireContinue(); });
+    gcContinueBtn.addEventListener('click', (e) => { e.stopPropagation(); gcCsFireContinue(); });
+  }
   if (gcMicBtn) gcMicBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!window.openVoicePanelFor) return;
@@ -1916,6 +2523,9 @@
   if (gcEmojiBtn) gcEmojiBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     if (!window.openEmojiPanelForInsert) return;
+    // #145：再次点击=关闭（按钮切换开关；先于 openEmojiPanelForInsert 判断，防「重开+外点关闭互相覆盖」）
+    const epEl = document.getElementById('emoji-panel');
+    if (epEl && !epEl.hidden) { window.closeEmojiPanelForInsert && window.closeEmojiPanelForInsert(); return; }
     // allowUrl：链接保存的表情在群聊里直接发送（仅信纸插入才限 data:）
     window.openEmojiPanelForInsert((src) => sendGcSticker(src), { allowUrl: true });
     // mail-emoji-mode 会把面板压低到 bottom:64px（写信页布局），群聊页与聊天页一致用默认 96px

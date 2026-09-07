@@ -44,6 +44,9 @@ const STRICT = has('--strict');
 
 const toolsDir = join(root, 'tools');
 let files = readdirSync(toolsDir).filter(f => /^verify-.*\.mjs$/.test(f) && f !== SELF).sort();
+// verify-triage（套件事后分析器，需 --scripts/套件日志参数）与其分类判据自检 classify
+// 都是元工具不是产品回归检查，混进被跑清单必然误报（#129）
+files = files.filter(f => f !== 'verify-triage.mjs' && f !== 'verify-triage-classify.mjs');
 if (!has('--no-core') && existsSync(join(toolsDir, 'verify.mjs'))) files = ['verify.mjs'].concat(files);
 if (filters.length) files = files.filter(f => filters.some(p => f.includes(p)));
 if (!files.length) { console.log('没有匹配的 verify 脚本（过滤器：' + filters.join(', ') + '）'); process.exit(0); }
@@ -56,6 +59,7 @@ const freePort = () => new Promise((res) => {
 
 const RUN_ONE_PORT = 'MOCHI_CDP_PORT';
 const usesPortEnv = new Map();
+const scriptTimeout = new Map();
 
 const runOne = async (file) => new Promise(async (res) => {
   const t0 = Date.now();
@@ -69,9 +73,18 @@ const runOne = async (file) => new Promise(async (res) => {
     cwd: root, windowsHide: true,
     env: port ? Object.assign({}, process.env, { [RUN_ONE_PORT]: String(port) }) : process.env
   });
+  // 脚本级超时提示：脚本头部 `verify-suite:timeout=毫秒` 可上调单个慢脚本预算（#129，pong-balance 首用）
+  let tmo = TIMEOUT;
+  if (!scriptTimeout.has(file)) {
+    try {
+      const m = readFileSync(join(toolsDir, file), 'utf8').match(/verify-suite:timeout=(\d+)/);
+      scriptTimeout.set(file, m ? Math.max(TIMEOUT, Number(m[1])) : TIMEOUT);
+    } catch (e) { scriptTimeout.set(file, TIMEOUT); }
+  }
+  tmo = scriptTimeout.get(file);
   let buf = '';
   let killed = '';
-  const timer = setTimeout(() => { killed = 'timeout'; try { child.kill('SIGKILL'); } catch (e) {} }, TIMEOUT);
+  const timer = setTimeout(() => { killed = 'timeout'; try { child.kill('SIGKILL'); } catch (e) {} }, tmo);
   child.stdout.on('data', d => { buf += d; if (buf.length > 400000) buf = buf.slice(-200000); });
   child.stderr.on('data', d => { buf += d; if (buf.length > 400000) buf = buf.slice(-200000); });
   child.on('error', e => { clearTimeout(timer); res({ file, code: -1, ms: Date.now() - t0, killed: 'spawn-error: ' + e.message, out: buf }); });
@@ -144,5 +157,14 @@ if (hard.length) {
   console.log('注意：断言失败 ≠ 一定是回归。现存脚本含「断言已被后续版本改掉」一类，' +
     '请逐项对照 FIX-REGRESSION.md 判定：该修的修，已过期的删或改期望，别整体忽略。' +
     '需要把它当门禁时用 --strict（断言失败或超时即退出码 1；环境不满足不算）。');
+}
+// #162/#129 防泄漏：跑批末清理残留无头 Chrome（只杀命令行同时带 remote-debugging-port
+// 且 user-data-dir 含 mochi- 的验证实例——脚本临时档都是 mkdtemp('mochi-*')，不碰用户浏览器）
+if (process.platform === 'win32') {
+  try {
+    const { execSync } = await import('node:child_process');
+    execSync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"Name='chrome.exe'\\" | Where-Object { $_.CommandLine -match 'remote-debugging-port' -and $_.CommandLine -match 'mochi-' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"`, { stdio: 'ignore', timeout: 30000 });
+    console.log('（已清理残留验证用无头 Chrome，防 #162 型临时档涨盘）');
+  } catch (e) { /* 清理失败不影响套件结论 */ }
 }
 process.exit(hard.length && STRICT ? 1 : 0);

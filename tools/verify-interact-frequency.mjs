@@ -46,7 +46,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
-const cdpPort = 9700 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 100));
 const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-interactfreq-' + Date.now()), '--remote-debugging-port=' + cdpPort, 'about:blank'], { stdio: 'ignore' });
 
 let ws = null, msgId = 0; const pend = new Map();
@@ -103,6 +103,10 @@ try {
   await sleep(4500); // 等开屏/数据就绪
 
   console.log('\n== S1/S2/S3 存量概率迁移 ==');
+  // FIX（#164 脚本侧）：种前先清四库——页面初始化偶发会先把带 probLowV313=true 标记的默认
+  // settings 落盘（时序竞态），Object.assign 种子合并会保留旧标记，迁移函数见标记即跳过，
+  // 导致「flag 已打但 prob 未吸附」的假阳性抖动。清库后种子即「无标记的存量老设备」，语义不变。
+  await evalJs("(function(){ var s=window.activeStore(); ['ta-ask','ta-choose','ta-curious','ta-roast'].forEach(function(k){ s.set(k,''); }); return true; })()");
   // 关掉自动弹窗避免测试期间抢焦点；种入旧默认值 / 自定义值
   await evalJs(seedSettings('ta-ask', { enabled: true, prob: 20, popupProb: 0 }));
   await evalJs(seedSettings('ta-roast', { enabled: true, prob: 30, popupProb: 0 }));
@@ -143,7 +147,8 @@ try {
   const taSrc = readFileSync(join(root, 'src/js/ta-ask.js'), 'utf8');
   const ckSrc = readFileSync(join(root, 'src/js/ck-question.js'), 'utf8');
   const gateCalls = (taSrc.match(/if \(!interactGateOk\(\)\) return;/g) || []).length;
-  ok('ta-ask.js 四类 maybeTrigger 均接全局闸门（4 处）', gateCalls === 4, { gateCalls });
+  // FIX（#164 脚本侧）：同频 cc 互动卡（maybeTriggerTACC）加入后全局闸门接入点 4→5，断言随之更新
+  ok('ta-ask.js 五类 maybeTrigger 均接全局闸门（5 处）', gateCalls === 5, { gateCalls });
   ok('ta-ask.js 四个库均接入存量迁移且旧默认值映射正确',
     taSrc.includes('migrateInteractProb(d, KEY, [20, 10])') &&
     taSrc.includes('migrateInteractProb(d, KEY2, [15, 8])') &&

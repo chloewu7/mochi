@@ -51,6 +51,14 @@
   // 之后只对「比这个版本更新」的部署再提醒——一天多次部署每次都会提醒一次，不会一天只弹一次；
   // ② 弹条前若页面 data-build-ts 已等于线上 version.json ts，说明已是最新，跳过。
   const VER_ACK_KEY = 'xy-home-v2:ver-update-ack-ts';
+  // FIX 2026-09-07 #225 顶部更新条「一直重复提醒」（v3.26.x 按版本 ack 后用户复发报障）。残留两洞：
+  // ① ack 只在点「刷新/稍后」时写——用户看到条不点（直接杀掉重开/切走），ack 不存在 → 同一版本每次打开都弹；
+  // ② SW 通道拉 version.json 失败时 showVerBar() 无 ts 照弹，ack 被整体绕过（GitHub Pages 弱网常态）。
+  // 收口（v2，按站点主口径修订：本站一天可能部署十几次，禁止任何按时间窗压制新版本提醒）：
+  // ver-update-notify 记「最近弹过的版本 ts」——弹条即记、永久有效：同一版本只弹一次（无论点没点
+  // 按钮、隔多久重开）；更新的版本（ts 更大）立即照弹，不受任何时间限制；ts 未知（拉版本失败）只在
+  // 从没弹过条时才照弹（宁多勿漏只留给全新用户；真正的新版本由轮询通道在网络恢复后正常提醒，不会漏）。
+  const VER_NOTIFY_KEY = 'xy-home-v2:ver-update-notify';
   let _verBarShown = false;
   // 用户上次已确认/已刷到的版本时间戳（0 = 从未确认过）
   function verAckTs() {
@@ -69,6 +77,24 @@
     if (!n || isNaN(n)) return true;
     return n > verAckTs();
   }
+  function verLsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function verLsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  // 弹条即记「ts|时刻」，不依赖用户点按钮——同版本只弹一次的依据（记录永久有效，不按时间过期）
+  function verMarkNotify(onlineTs) {
+    const n = Number(onlineTs);
+    verLsSet(VER_NOTIFY_KEY, (n > 0 ? n : 0) + '|' + Date.now());
+  }
+  // FIX 2026-09-07 #225v2 是否已提醒过：同版本（记录 ts ≥ 线上 ts）不再弹；
+  // ts 未知（拉版本失败）时只要弹过任何版本就不再照弹——「宁多勿漏」只保留给从没弹过条的
+  // 全新用户，弱网绕过免打扰的口子堵死；真正的新版本由轮询通道在网络恢复后立即提醒，不会漏。
+  function verSeen(onlineTs) {
+    const last = verLsGet(VER_NOTIFY_KEY);
+    if (!last) return false;
+    const n = Number(onlineTs);
+    if (!n || isNaN(n)) return true;
+    const lastTs = Number(String(last).split('|')[0]);
+    return lastTs >= n;
+  }
   // v3.10.x：带超时的 fetch（5s），弱网不挂起；失败由调用方快速重试
   function fetchJson(url, ms) {
     const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
@@ -78,9 +104,11 @@
       .catch(function (err) { if (timer) clearTimeout(timer); throw err; });
   }
   // 显示更新条（版本轮询 + SW 检测共用）：跨通道一次性去重 + 已确认过本版本不再提醒
+  // FIX 2026-09-07 #225v2：追加 verSeen 一版一弹（同版本不重复弹；新版本立即弹，无任何时间窗）
   function showVerBar(onlineTs) {
-    if (_verBarShown || !verShouldNotify(onlineTs)) return;
+    if (_verBarShown || !verShouldNotify(onlineTs) || verSeen(onlineTs)) return;
     _verBarShown = true;
+    verMarkNotify(onlineTs);
     const barEl = document.getElementById('ver-update-bar');
     if (!barEl) { toast('已检测到新版本，刷新页面即可更新'); return; }
     barEl.hidden = false;
@@ -400,4 +428,34 @@
       setTimeout(maybeShow, 300); // 留一点开屏退出动画缓冲
     }
   }, 300);
+})();
+// ===== v3.26.x：防倒卖第二锚点——开屏两条官方声明「在位看门狗」（与 clock.js 运行时回填互为备份） =====
+// clock.js 的回填负责加载时重建/篡改重写 + 官方远程刷新；这里是独立常驻兜底：任何时刻只要两条声明
+// 缺失（二传者运行时删除、或 clock.js 回填整段被删），5 秒内用本地常量补回——想彻底去掉声明必须
+// 同时改 clock.js 与本文件两处。只补缺失、绝不改写已在位内容，与 clock.js 的 marked 判定互不干扰。
+(function () {
+  const W1 = 'Mochi字卡网站完全免费，作者只有小红书这一个账号：小红书@言序（1842523578）。如有出现任何收费情况，均为诈骗，注意防止被骗。';
+  const W2 = '二传、分享本站链接必须标注作者署名：小红书 @言序（1842523578），禁止删除或修改。严禁冒为自己制作、删除篡改署名，或以任何形式收费倒卖本站链接、安装包——本站完全免费，收费即诈骗。如果你是花钱买来的链接：你被骗了，请拒付退款并举报卖家。';
+  function mkWatchBar(tag, title, text) {
+    const b = document.createElement('div');
+    b.className = 'splash-alert';
+    b.setAttribute('data-anti-scam', tag);
+    b.innerHTML = '<div class="splash-alert-t"></div><p></p>';
+    b.querySelector('.splash-alert-t').textContent = title;
+    b.querySelector('p').textContent = text;
+    return b;
+  }
+  setInterval(function () {
+    try {
+      const n = document.getElementById('splash-notice');
+      if (!n) return;
+      if (!n.querySelector('.splash-alert[data-anti-scam="1"]')) {
+        n.insertBefore(mkWatchBar('1', '防骗提醒', W1), n.firstChild);
+      }
+      if (!n.querySelector('.splash-alert[data-anti-scam="2"]')) {
+        const b1 = n.querySelector('.splash-alert[data-anti-scam="1"]');
+        n.insertBefore(mkWatchBar('2', '转载署名 · 严禁倒卖', W2), b1 ? b1.nextSibling : n.firstChild);
+      }
+    } catch (e) { /* 静默：看门狗绝不能成为错误源 */ }
+  }, 5000);
 })();

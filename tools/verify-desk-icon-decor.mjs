@@ -40,7 +40,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9900 + Math.floor(Math.random() * 400);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9900 + Math.floor(Math.random() * 400));
 const userDataDir = join(process.env.TEMP || '/tmp', 'mochi-did-' + Date.now());
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
@@ -93,7 +93,9 @@ await evalJs("(function(){var s=document.getElementById('splash');if(s&&!s.class
 await sleep(500);
 await evalJs("(function(){var c=document.getElementById('splash-confirm-ok');if(c&&!c.hidden)c.click();return true;})()");
 await sleep(800);
-check('开屏已关闭进入桌面', await evalJs("!document.getElementById('splash')"));
+// #129 修正：应用关开屏是加 .hide class（节点保留在 DOM，不删），确认按钮受滑到底门控时兜底强制 hide
+await evalJs("(function(){var s=document.getElementById('splash');if(s)s.classList.add('hide');return true;})()");
+check('开屏已关闭进入桌面', await evalJs("(function(){var s=document.getElementById('splash');return !s||s.classList.contains('hide');})()"));
 
 // T2 构造「用户装修过」状态：把第二页花园图标移出网格，直接挂在页面上（与装修库
 // 「添加到此页」/拖拽移出同构的 DOM 状态），第三页网格内图标保持原位作对照组

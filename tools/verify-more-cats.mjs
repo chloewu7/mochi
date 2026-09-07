@@ -59,7 +59,7 @@ const candidates = [
 const chromePath = candidates.find((p) => { try { return statSync(p).isFile(); } catch (e) { return false; } });
 if (!chromePath) { console.error('找不到 Chrome/Edge'); process.exit(1); }
 
-const cdpPort = 9500 + Math.floor(Math.random() * 200);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9500 + Math.floor(Math.random() * 200));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(tmpdir(), 'mochi-mc-' + Date.now()),

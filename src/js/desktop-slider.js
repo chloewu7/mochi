@@ -74,9 +74,13 @@
   }
 
   // v3.6.x：外部（新增/删除桌面页后）调用，重建圆点数量 + 校正当前索引
+  // v3.27.x（#140）：页数钳到实际 slide 数——deskRebuild 可能在 buildDeskPages
+  // 删页完成前被触发（回填重放/恢复默认竞态），此时 idx 可能 ≥ slides.length；
+  // 旧实现把 scrollLeft 设到超界页位（Chrome 上 snap 到空白区，视觉=当前页空白、
+  // 卡片全部「不显示」）。钳制后圆点/索引与实际页数一致。
   window.deskRebuild = function () {
     const slides = getSlides();
-    idx = Math.max(0, Math.min(slides.length - 1, idx));
+    idx = Math.max(0, Math.min(Math.max(slides.length - 1, 0), idx));
     // 重建圆点
     const dotsBox = document.getElementById('desktop-dots');
     if (dotsBox) {

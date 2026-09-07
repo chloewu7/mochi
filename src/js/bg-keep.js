@@ -1,5 +1,6 @@
 // ===== 功能：后台保活 + 后台通知（仿星言简约版） =====
-// 后台保活：播放静音音频（1Hz 正弦波，音量 0.0001）保持页面定时器活跃，
+// 后台保活：播放近静音音频（1 秒循环正弦波；安卓 18000Hz / iOS 220Hz，幅度 0.006/0.002
+//           × volume 0.05 ≈ 数字 -70/-80dBFS）保持页面定时器活跃，
 //           并请求屏幕常亮（wakeLock），防止浏览器后台休眠导致消息/回复停止；
 //           首次交互时恢复 AudioContext（浏览器自动播放策略要求）。
 // 后台通知：开启后，页面不在前台时收到 TA 的新消息会弹出浏览器通知。
@@ -68,6 +69,12 @@
       kaPauseStreak++;
       delayMs = Math.min(cfg.base * Math.pow(2, Math.min(kaPauseStreak - 1, 10)), cfg.max);
     }
+    // FIX 2026-09-04 #153 Chromium 139 起安卓后台页面冻结从 5 分钟缩到 1 分钟（stop-in-background，
+    // Chrome for Android 139 / Edge 等内核跟进）——保活音频暂停超过冻结线页面即被整个冻结
+    // （定时器全停=后台消息/通知全停）。页面隐藏期间补播退避封顶 20s（前台仍 60s 不变，
+    // 不回归 v3.13.x 音频拉锯修复）：保证冻结线内至少 2~3 次重试，音频焦点一让位就能恢复
+    // 「正在播放」豁免躲过冻结。
+    if (document.visibilityState === 'hidden' && delayMs > 20000) delayMs = 20000;
     kaDelay = delayMs;
     window.__kaNextDelayMs = delayMs; // 回归探针
     kaTimer = setTimeout(function () {
@@ -142,7 +149,7 @@
   // 实听是明显的周期性「嘟嘟嘟嘟」（1 秒 loop 接缝 + 持续低频纯音），用户报修
   // 「不是静音音频」。iOS 无安卓那套无声节流，保活只要求「有非零样本在播」：
   // iOS 把幅度降到 ±3 LSB 级（0.002 × 0.05 ≈ -80dBFS，任何扬声器物理不可闻，
-  // 但样本非零不构成数字静音）；安卓保持原值不动，防回归无声节流。
+  // 但样本非零不构成数字静音）；安卓同型问题多机型复发（#190：OPPO Find X9 自带浏览器 HeyTapBrowser 等「一进网页就有底噪/电流声」）——220Hz 低频纯音在人耳最敏感频段、循环常播，-60dBFS 在灵敏扬声器上实听即持续嗡声，说明 0.02 下限过高；降为 0.006（×0.05 音量 ≈ -88dBFS，物理不可闻）：防无声节流要的是「样本非零 + volume>0」（浏览器静音检测按零样本/静音状态判定，不按响度），非零即保活有效；若保活因此失效（后台被冻结）再回调上限并换其他豁免信号，不回 220Hz 大音量（原安卓幅度 0.02）。
   let KEEP_AUDIO_DATAURL = '';
   function kaIsIOS() {
     try {
@@ -156,7 +163,21 @@
     if (KEEP_AUDIO_DATAURL) return KEEP_AUDIO_DATAURL;
     try {
       const sr = 44100, sec = 1, n = sr * sec;
-      const amp = kaIsIOS() ? 0.002 : 0.02;
+      // #190：安卓 0.02 → 0.006（原值实听底噪，见上方注释；iOS 维持 0.002）
+      const amp = kaIsIOS() ? 0.002 : 0.006;
+      // #207：安卓频率 220Hz → 18000Hz——#190 降幅度后 OPPO R15 自带浏览器（HeyTapBrowser）
+      // 等多机型仍报「后台保活有电流声，不是静音音频」：220Hz 落在人耳最敏感低频段，
+      // -70dBFS 数字电平在老机型功放底噪/夜间安静环境实听仍是持续嗡声，降幅度已到头
+      // （再降会跌破 Chromium audible 判定、保活失效）。保活只看「样本非零 + volume>0」：
+      // Chromium 的 audible/无声节流按数字样本电平判定、与频率无关——18kHz 与 220Hz 同
+      // 幅度 RMS 完全一致，保活有效性零变化；而人耳对 18kHz 基本无感 + 手机外放高频频响
+      // 天然滚降 20~40dB（老机型更差），物理不可闻。18000×1s=整周期，循环接缝无相位跳变
+      // （无咔哒声）；18000 < 22050 奈奎斯特且距 48k 重采样抗混叠滤波带有余量。
+      // iOS 维持 220Hz@0.002（v3.15.x 已收敛，bit 级不动）。不做机型白名单——全安卓
+      // 一次性换根因，防「修 A 机型坏 B 机型」反复。
+      // 【并行事故警示】本修改曾被 AI-A #206 收口 stash 隔离后「原样恢复」丢失（2026-09-05
+      // 23:5x，同 #202 哨兵丢失事故第二现场），由 AI-B 重写——stash 隔离后必须 diff 确认。
+      const freq = kaIsIOS() ? 220 : 18000;
       const buf = new ArrayBuffer(44 + n * 2);
       const dv = new DataView(buf);
       const ws = function (o, s) { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
@@ -165,7 +186,7 @@
       dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
       ws(36, 'data'); dv.setUint32(40, n * 2, true);
       for (let i = 0; i < n; i++) {
-        const v = Math.sin(2 * Math.PI * 220 * (i / sr)) * amp;
+        const v = Math.sin(2 * Math.PI * freq * (i / sr)) * amp;
         dv.setInt16(44 + i * 2, Math.round(v * 32767), true);
       }
       const bytes = new Uint8Array(buf);
@@ -404,6 +425,21 @@
   });
   window.addEventListener('pageshow', function (e) {
     if (e.persisted || document.visibilityState === 'visible') _onFgVisible();
+  });
+  // FIX 2026-09-04 #153 切后台方向保活自愈——原只有回前台的 healKeepAlive，切后台没有：
+  // 若切后台瞬间音频正处暂停（前台被其他 App 抢过音频焦点、退避已在最长 60s 轨道），
+  // 这段静默窗口会直接跨过 Chromium 139 的 1 分钟冻结线 → 页面整个被冻结（定时器全停，
+  // 后台消息/系统通知全停，回前台解冻后积压定时器一口气补跑——用户报障形态）。
+  // 这里切后台时：清退避轨道 + 立即补播一次 + 按最快档（5s）排下一次，把隐藏期静默窗口
+  // 压到 20s 封顶（见 kaSchedule 内隐藏期钳制）；音乐在播时跳过（媒体会话由音乐维持）。
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'hidden') return;
+    if (!keepEnabled || !keepAudio || !keepAudio.el || musicNowPlaying()) return;
+    if (!keepAudio.el.paused) return;
+    kaResetBackoff();
+    const p = keepAudio.el.play();
+    if (p && p.catch) p.catch(function () {});
+    kaSchedule();
   });
   function requestWakeLockTop() {
     try {
@@ -925,8 +961,14 @@
     window.addEventListener('focus', markVisible);
   })();
   const NOTIFY_HIDDEN_MIN_MS = 15000;
-  const NOTIFY_CHAT_DUP_MS = 15 * 60000; // v3.13.x：30→15 分钟
-  const NOTIFY_SENT_DUP_MS = 6 * 60000;  // v3.13.x：10→6 分钟
+  // v3.20.x：去重窗口大幅缩短（15→5 分 / 6→2 分 / 新增前台看过 3 分）——
+  // 「经常收不到」的根因：TA 字卡池有限（常用短语/表情包重复率高），长窗口内容去重
+  // 会把【内容恰好与最近聊过/发过相同的新消息】误判为重放而吞掉。重放源头已分别
+  // 堵住（psync 补投递 silent、切后台过渡期 15s 闸门、回前台按实际发送数汇总），
+  // 去重只需覆盖「几分钟内的同条消息多机制重弹」短窗口即可
+  const NOTIFY_CHAT_DUP_MS = 5 * 60000;  // v3.20.x：历史聊天查重 15→5 分钟
+  const NOTIFY_SENT_DUP_MS = 2 * 60000;  // v3.20.x：已发通知查重 6→2 分钟
+  const NOTIFY_SEEN_DUP_MS = 3 * 60000;  // v3.20.x：前台看过记忆 15→3 分钟
   // 通知文本归一化：剥 dataURL/语音 ||| 段/SVG 标签，去空白后取前 100 字符做指纹
   function normNotifyKey(raw) {
     let s = String(raw || '');
@@ -1050,8 +1092,10 @@
   }
   function seenDup(key) {
     if (!key) return false;
+    // v3.20.x：前台看过记忆用独立短窗口（3 分钟）——字卡池有限，长窗口会把
+    // 「内容恰好相同的新消息」误吞（用户实测：经常收不到后台弹窗）
     const last = seenRecently.get(key);
-    return !!(last && Date.now() - last < NOTIFY_CHAT_DUP_MS);
+    return !!(last && Date.now() - last < NOTIFY_SEEN_DUP_MS);
   }
   // v3.13.x：拦截统计——诊断"只听见声音不弹窗"时一屏看出每条消息卡在哪道闸门
   let gateStats = { total: 0, tooFresh: 0, dup: 0, sent: 0 };
@@ -1085,12 +1129,16 @@
     if (document.visibilityState === 'visible') { markSeen(nkey); return; }
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     gateStats.total++;
+    // v3.31.x：extra.force —— 一次性事件（如来电通知）不适用过渡期/去重闸门：
+    // 来电是「错过就没了」的单发事件，切后台头 15 秒内命中、或与近期通知文案
+    // 相同（「XX 来电了」高频重复）都不该被拦。消息类通知仍走原三道闸门。
+    const force = !!extra.force;
     // v3.16.x：过渡期闸门改用「切后台时刻」——lastVisibleAt 是最近一次回前台时间，
     // 前台久驻后（如看了 10 分钟）它很旧，切后台瞬间积压的定时器批量到点产生的
     // 一堆消息会全部通过闸门 → 弹出大量看过的内容。改为切后台头 15 秒内一律不弹
-    if (lastHiddenAt > 0 && Date.now() - lastHiddenAt < NOTIFY_HIDDEN_MIN_MS) { gateStats.tooFresh++; return; }
-    if (notifiedDup(nkey) || seenDup(nkey)) { gateStats.dup++; return; }
-    if (recentChatDup(nkey, ts)) { gateStats.dup++; return; }
+    if (!force && lastHiddenAt > 0 && Date.now() - lastHiddenAt < NOTIFY_HIDDEN_MIN_MS) { gateStats.tooFresh++; return; }
+    if (!force && (notifiedDup(nkey) || seenDup(nkey))) { gateStats.dup++; return; }
+    if (!force && recentChatDup(nkey, ts)) { gateStats.dup++; return; }
     gateStats.sent++;
     // v3.19.x：累加「本次后台实际发送的通知数」——回前台汇总用它（见 visibilitychange
     // 处理器），发送者名取本次通知标题

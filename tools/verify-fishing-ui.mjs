@@ -90,7 +90,7 @@ const chromePath = candidates.find((p) => { try { return statSync(p).isFile(); }
 if (!chromePath) { console.error('找不到 Chrome/Edge'); process.exit(1); }
 
 const tmpDir = join(os.tmpdir(), 'mochi-fish-ui-' + Date.now());
-const cdpPort = 9900 + Math.floor(Math.random() * 300);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9900 + Math.floor(Math.random() * 300));
 const chrome = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-first-run', '--user-data-dir=' + tmpDir, '--remote-debugging-port=' + cdpPort, 'about:blank'], { stdio: 'ignore' });
 process.on('exit', () => { try { chrome.kill(); } catch (e) {} });
 

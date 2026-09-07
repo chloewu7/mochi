@@ -41,7 +41,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
-const cdpPort = 9890 + Math.floor(Math.random() * 100);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9890 + Math.floor(Math.random() * 100));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-avfix-' + Date.now()),
@@ -119,7 +119,10 @@ async function seedPool(img, current) {
 function zeroTimerWithPool(img) {
   return evalJs(`(function(){ const s=window.activeStore();
     s.set('avatar-lib', JSON.stringify([${JSON.stringify(img)}]));
-    s.set('avatar-lib-enabled','1'); s.set('avatar-lib-last','0'); s.set('avatar-lib-next','0'); return true; })()`);
+    s.set('avatar-lib-enabled','1'); s.set('avatar-lib-last','0'); s.set('avatar-lib-next','0');
+    try { s.remove && s.remove('avatar-lib-cur-hash'); } catch(e){}
+    try { localStorage.removeItem('xy-home-v2:default:avatar-lib-cur-hash'); } catch(e){}
+    return true; })()`);
 }
 // 真实 UI 进入聊天页（桌面点聊天图标 → enterChat：fillAvatar 头部 + renderWindow 全量渲染）
 async function enterChatReal() {
@@ -221,11 +224,31 @@ async function avatarState(mark) {
 {
   await seedPool(RED, RED); // 当前=RED 小图；池=[大GOLD]
   await zeroTimerWithPool(BIGGOLD);
-  // 池本身也是大键（只在 IDB），启动首检会因池未回填而跳过 → 等 65s 让回填后的下一轮轮询触发
+  // 池是大键（只在 IDB），启动首检会因池未回填而跳过；产品靠 60s 轮询在回填完成后触发。
+  // #129 修正：回填速度随全库体积浮动（#160 后库显著变大），固定 65s 常错过唯一轮询点——
+  // 改自适应轮询：盯 avatar-lib-last 推进（换入前先推进周期）或 cs 变 jpeg，命中即提前收工
   await gotoApp();
-  console.log('…… 等待 65s（IDB 回填 + 轮询触发大图更换）');
-  await sleep(65000);
-  let st = await avatarState('');
+  // #129 修正：池是大键（只在 IDB），累积 profile 下启动回填可能超预算挂起 → 页内 getLib()
+  // 永远为空 → 轮询永远跳过（空 profile 探针 5s 即恢复，验证产品切换链路本身正常）。
+  // 池不可读时从当前页面直接重种（s.set 三写、memoryCache 立即可读），继续测真实的
+  // 「60s 轮询 → jpeg 压缩 → cs 落 LS」链路——这才是 T3 的被测核心
+  // 池不可读或被应用首启默认池种子（~214B，含与 cs 相同的 RED→「随机到当前头像跳过」永跳）
+  // 覆盖时，强制重种到 [BIGGOLD]；以「池 JSON 长度===BIGGOLD」为就绪条件
+  for (let i = 0; i < 12; i++) {
+    const len = await evalJs(`String((window.activeStore().get('avatar-lib')||'')).length`);
+    if (Number(len) === BIGGOLD.length) break;
+    await sleep(2000);
+    await zeroTimerWithPool(BIGGOLD);
+  }
+  const seedAt = Date.now();
+  console.log('…… 自适应等待（IDB 回填 + 60s 轮询触发大图更换，上限 130s）');
+  let st = null;
+  for (let i = 0; i < 44; i++) {
+    await sleep(3000);
+    st = await avatarState('');
+    const last = parseInt(await evalJs(`String(window.activeStore().get('avatar-lib-last')||'0')`), 10);
+    if ((st.csIsJpeg && st.csLen > 1000) || (last > seedAt && st.csIsJpeg)) break;
+  }
   check('T3.1 大图已压缩写入（jpeg 且 <200KB，原 ' + BIGGOLD.length + 'B → ' + st.csLen + 'B）',
     st.csIsJpeg && st.csLen > 0 && st.csLen < 200 * 1024, 'len=' + st.csLen + ' jpeg=' + st.csIsJpeg);
   check('T3.2 cs 键同步落在 localStorage（跨会话立即可读）', await evalJs(

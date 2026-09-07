@@ -178,6 +178,13 @@
   function stopFsMonitor() {
     if (_fsMonTimer) { clearInterval(_fsMonTimer); _fsMonTimer = null; }
   }
+  // FIX 2026-09-05 #189：iOS（含 iPad）一律不启动方向监视——Safari 根本没有
+  // orientation.lock（WebKit 明确不支持，全屏态调用也只返回错误，见 WebKit Bugzilla
+  // #257695），监视器每 300ms 查到「横屏」后 lock 必然失败 → handleLandscapeForced
+  // 把刚进的全屏自动杀掉：iPad 横屏持握点开【全屏模式】约 2 秒后被退出 + 误报
+  // 「网页全屏会自动转成横屏」弹窗，开关态错乱——即报修的「iPad 全屏模式没有生效」。
+  // 横屏持握 iPad 是完全合法的姿势，不是安卓那种「全屏被强制转横」故障。
+  function startFsMonitorSafe() { if (isIOS) return; startFsMonitor(); }
   function startFsMonitor() {
     stopFsMonitor();
     let left = 4000;
@@ -220,11 +227,19 @@
     try {
       const el = document.documentElement;
       let p;
-      if (el.requestFullscreen) p = el.requestFullscreen();
+      // v3.26.x #212：挖孔屏「全屏不盖满」——安卓 Chrome 默认 navigationUI:'auto'
+      // 时不把全屏面铺到挖孔/摄像头区，页面外系统层 letterbox 顶端露一条空白
+      //（页面内任何测量都全 ✓ 无法诊断：iQOO12+Chrome 诊断全绿仍报「聊天全屏
+      // 顶端留白」，用户明说多机型都有）。Chromium issue 40723205 官方 workaround
+      // 即 navigationUI:'hide'；iOS 路径（iosTryNativeFs）早已同款参数，此处仅补
+      // 安卓路径。不认选项参数的老内核会忽略它，webkitRequestFullscreen 前缀
+      // API 本就不收参数，行为均不变。
+      const fsOpts = { navigationUI: 'hide' };
+      if (el.requestFullscreen) p = el.requestFullscreen(fsOpts);
       else if (el.webkitRequestFullscreen) p = el.webkitRequestFullscreen();
-      // 进入后锁竖屏（需全屏态，此时已满足）并启动方向监视；
+      // 进入后锁竖屏（需全屏态，此时已满足）并启动方向监视（iOS 经 Safe 入口跳过）；
       // 无论锁屏 API 是否报成功，监视器都会复核视口方向
-      const tryLock = () => { lockFsOrient(); startFsMonitor(); };
+      const tryLock = () => { lockFsOrient(); startFsMonitorSafe(); };
       if (p && p.then) { p.then(tryLock, tryLock); return p; }
       setTimeout(tryLock, 300);
     } catch (e) {}
@@ -444,7 +459,11 @@
         // 完成可能超过 900ms，过早回滚会把开关改回关闭并经 MutationObserver
         // 持久化 FS_KEY='0'（用户意图被覆盖，下次进入不再自动恢复）。
         setTimeout(() => {
-          if (isFullscreen() && viewportLandscape()) {
+          // FIX 2026-09-05 #189：iOS 跳过「全屏+横屏=被强制转横」杀全屏分支——
+          // iPad 横屏持握点开关，requestFullscreen 成功后这里 viewportLandscape()=true
+          // → handleLandscapeForced 立即退出全屏 + FB_KEY=1 永久兜底 + 误报弹窗，
+          // 全屏开一次被杀一次（iPad 无方向锁，横屏持握是合法姿势非故障）
+          if (!isIOS && isFullscreen() && viewportLandscape()) {
             store.set(FB_KEY, '1');
             handleLandscapeForced();
             return;
@@ -558,14 +577,18 @@
   // 过早被拒」的时序窗口），退出全屏停止监视
   document.addEventListener('fullscreenchange', () => {
     syncToggle(false); applyFsInputHacks(); syncFsClass();
-    if (isFullscreen()) startFsMonitor(); else handleFsExit();
+    if (isFullscreen()) startFsMonitorSafe(); else handleFsExit();
   });
   document.addEventListener('webkitfullscreenchange', () => {
     syncToggle(false); applyFsInputHacks(); syncFsClass();
-    if (isFullscreen()) startFsMonitor(); else handleFsExit();
+    if (isFullscreen()) startFsMonitorSafe(); else handleFsExit();
   });
   // v3.6.x：全屏/兜底激活期间系统方向被外力改横（手机横放/自动旋转）→ 锁回竖屏
+  // FIX 2026-09-05 #189：iOS（含 iPad）整段跳过——Safari 无方向锁 API，锁不回竖屏；
+  // 全屏态转横=误杀全屏（同 startFsMonitorSafe），非全屏态转横=弹「请恢复竖屏」
+  // 误导弹窗。iOS 用户横屏持握是合法姿势，布局由 CSS 自适应，无需 JS 纠偏。
   document.addEventListener('orientationchange', () => {
+    if (isIOS) return; // FIX 2026-09-05 #189（iOS 无方向锁，转横不纠偏不弹窗）
     const d = document.documentElement;
     if (!d.classList.contains('fs-active') && !d.classList.contains('fs-css-active')) return;
     if (window.innerWidth <= window.innerHeight) return;

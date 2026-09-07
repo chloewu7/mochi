@@ -49,7 +49,7 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
 
-const cdpPort = 9900 + Math.floor(Math.random() * 50);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9900 + Math.floor(Math.random() * 50));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-chat-send-' + Date.now()),
@@ -152,11 +152,25 @@ const r3 = JSON.parse(await tapSend('想你了') || '{}');
 check('对照：点发送「想你了」→ 消息落库', (r3.outs || []).filter(t => t === '想你了').length === 1, JSON.stringify(r3));
 
 // ④ 双击场景：连续两次点击（间隔 <2.5s）不重复发送（防重守卫仍生效）
+// #129 修正：①发送链路挂 pointerup（tapSend 同款事件链），裸 click() 不触发；
+// ②两次 tap 用真实间隔（同步连发第二击会砸进第一击的异步落盘中途致双双丢失）；
+// ③与 ③ 段发送拉开 >2.5s，隔离同文本守卫窗口的跨段干扰
+await sleep(2200);
 await evalJs(`(function(){
   var inp=document.getElementById('chat-input');
   inp.textContent='双击测试';
   var btn=document.getElementById('chat-send');
-  btn.click(); btn.click();
+  btn.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:1,pointerType:'touch'}));
+  btn.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,button:0,pointerId:1,pointerType:'touch'}));
+  btn.click();
+  return true;
+})()`);
+await sleep(200);
+await evalJs(`(function(){
+  var btn=document.getElementById('chat-send');
+  btn.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:0,pointerId:1,pointerType:'touch'}));
+  btn.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,button:0,pointerId:1,pointerType:'touch'}));
+  btn.click();
   return true;
 })()`);
 await sleep(900);

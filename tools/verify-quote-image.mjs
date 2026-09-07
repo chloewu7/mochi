@@ -1,4 +1,5 @@
 // ===== 引用图片/表情包消息验证：引用块只显示缩略图，不再重复显示「图片/表情包」占位文字 =====
+// #149：场景 E 覆盖媒体池令牌——图片消息已令牌化（@@m:hash）时引用仍出缩略图、令牌串不进文本
 // 用法：node tools/verify-quote-image.mjs（需先 node build.mjs）
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -35,7 +36,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const baseUrl = 'http://127.0.0.1:' + server.address().port;
-const cdpPort = 9600 + Math.floor(Math.random() * 90);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9600 + Math.floor(Math.random() * 90));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-qi-' + Date.now()),
@@ -196,6 +197,52 @@ const d = await quoteAndSend('combo', '收到图文');
 check('D1 组合消息点引用并选中', d.menuOk === 'ok', String(d.menuOk));
 check('D2 引用预览条：有缩略图、保留原文字「想你了 好想你」', d.bar && d.bar.hasImg && d.bar.text === '想你了 好想你', JSON.stringify(d.bar));
 check('D3 发送后气泡引用块：缩略图 + 原文字都在', d.last && d.last.hasImg && d.last.qText === '想你了 好想你' && d.last.body.indexOf('收到图文') >= 0, JSON.stringify(d.last));
+
+// 场景 E：#149 媒体池令牌——历史图片已令牌化（@@m:hash）时引用仍出缩略图、令牌串不进引用文本
+// tokenize 要求载荷 ≥1024 字符，1x1 PNG 太短。
+// #202 期望更新：产品现在对「解码失败的图」渲染占位（修无声空白气泡，iQOO12 实证），
+// 旧的伪造截断 PNG（不可解码）会被换成占位导致 E3 找不到 .msg-img-sm——改用页内 canvas
+// 生成真实可解码且 >1024 字符的 PNG 噪声图，保留本场景「令牌化+池解析」断言本意。
+console.log('--- 场景 E：引用已令牌化的图片消息（#149） ---');
+await openPage();
+const imgBigRes = await cdp('Runtime.evaluate', {
+  expression: "(async function(){var c=document.createElement('canvas');c.width=160;c.height=160;var x=c.getContext('2d');var d=x.createImageData(160,160);for(var i=0;i<d.data.length;i++){d.data[i]=(i*7919)&255;d.data[i*3+3]=255;}x.putImageData(d,0,0);return c.toDataURL('image/png');})()",
+  returnByValue: true, awaitPromise: true
+});
+const IMG_BIG = imgBigRes && imgBigRes.result ? imgBigRes.result.value : null;
+check('E-pre 场景图真实可解码且 ≥1024 字符', typeof IMG_BIG === 'string' && IMG_BIG.indexOf('data:image/png') === 0 && IMG_BIG.length >= 1024, String(IMG_BIG && IMG_BIG.length));
+const tokRes = await cdp('Runtime.evaluate', {
+  expression: "(async function(){var t=await window.mochiMediaTokenize(" + JSON.stringify(IMG_BIG) + ");await window.mochiMediaFlush();return t;})()",
+  returnByValue: true, awaitPromise: true
+});
+const TOKEN = tokRes && tokRes.result ? tokRes.result.value : null;
+check('E0 令牌生成（@@m:32位hex）', typeof TOKEN === 'string' && /^@@m:[0-9a-f]{32}$/.test(TOKEN), String(TOKEN));
+await evalJs("(function(){window.activeStore().set('chat-msgs', JSON.stringify(" + JSON.stringify([
+  { side: 'in', text: TOKEN, type: 'sticker', parts: [{ k: 'img', v: TOKEN, sub: 'sticker' }], ts: Date.now() - 800 },
+  { side: 'out', text: '旧对象引用', quote: { t: TOKEN, imgs: [TOKEN] }, qside: 'in', ts: Date.now() - 700 },
+  { side: 'out', text: '旧串引用', quote: TOKEN, qside: 'in', ts: Date.now() - 600 },
+]) + "));return true;})()");
+await sleep(200);
+await openPage();
+await gotoChat();
+await sleep(1500); // 观察器异步从池解析令牌 src
+const histE = await evalJs(`(function(){
+  const qs = Array.from(document.querySelectorAll('.msg-quote'));
+  return JSON.stringify(qs.map(function(q){
+    const img = q.querySelector('.msg-quote-img');
+    const t = q.querySelector('.msg-quote-text');
+    return { hasImg: !!img, src: img ? img.getAttribute('src').slice(0, 10) : null, text: t ? t.textContent : null };
+  }));
+})()`) || '[]';
+const eArr = JSON.parse(histE);
+check('E1 历史坏数据 t=令牌：引用块有缩略图、无令牌文本', eArr[0] && eArr[0].hasImg && eArr[0].text === null && eArr[0].src && eArr[0].src.indexOf('@@m:') !== 0, histE);
+check('E2 历史字符串令牌引用：渲染成缩略图', eArr[1] && eArr[1].hasImg && eArr[1].src && eArr[1].src.indexOf('@@m:') !== 0, histE);
+const e = await quoteAndSend('sticker', '令牌收到图');
+check('E3 令牌化表情包点引用并选中', e.menuOk === 'ok', String(e.menuOk));
+check('E4 引用预览条：有缩略图、无令牌文本', e.bar && e.bar.hasImg && !e.bar.text, JSON.stringify(e.bar));
+check('E5 发送后引用块：有缩略图、无「表情包」文字、正文保留', e.last && e.last.hasImg && !e.last.qText && e.last.body.indexOf('令牌收到图') >= 0, JSON.stringify(e.last));
+const eSrc = await evalJs("(function(){const items=Array.from(document.querySelectorAll('.msg'));const last=items[items.length-1];const img=last&&last.querySelector('.msg-quote-img');return img?img.getAttribute('src').slice(0,10):'no-img';})()");
+check('E6 发送后引用缩略图 src 已解析为池数据（不再是 @@m: 令牌）', typeof eSrc === 'string' && eSrc.indexOf('@@m:') !== 0 && eSrc !== 'no-img', String(eSrc));
 
 try { if (ws) ws.close(); } catch (e) {}
 try { chrome.kill(); } catch (e) {}

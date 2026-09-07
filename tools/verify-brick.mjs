@@ -40,7 +40,7 @@ if (!chromePath) { console.error('找不到 Chrome/Edge'); process.exit(1); }
 const tmpDir = mkdtempSync(join(tmpdir(), 'mochi-verify-brick-'));
 writeFileSync(join(tmpDir, 'index.html'), built || readFileSync(join(root, 'index.html'), 'utf8'));
 const baseUrl = 'file:///' + normalize(tmpDir).split(sep).join('/') + '/index.html';
-const cdpPort = 9700 + Math.floor(Math.random() * 200);
+const cdpPort = Number(process.env.MOCHI_CDP_PORT) || (9700 + Math.floor(Math.random() * 200));
 const chrome = spawn(chromePath, [
   '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
   '--disable-audio-output', '--user-data-dir=' + join(process.env.TEMP || '/tmp', 'mochi-brick-' + Date.now()),

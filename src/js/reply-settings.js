@@ -73,6 +73,9 @@
     'call-incoming': 15, 'call-pickup': 70, 'call-busy': 15, 'call-reject': 15, 'call-hangup': 2,
     // v3.26.x：刷新后恢复通话——开启后接通中刷新页面，通话面板+计时从接通时刻继续；关闭则记为中断
     'call-resume': 1,
+    // v3.26.x #200：禁止联系人挂断电话总开关（默认关）——开启后通话中对方永不主动挂断，
+    // 兜住「挂断几率为 0 仍被挂断」（该设置按联系人桌面隔离，未保存过键的联系人回落 2% 默认）
+    'call-no-hangup': 0,
     // v3.7.x：让对方继续说——cs-normal(0=理解回复快速回1条, 1=按正常回复时间设置)；
     // cs-trigger-name(顶部昵称触发) / cs-trigger-bar(底部聊天栏按钮触发)，两个独立开关可同时开
     'cs-normal': 0, 'cs-trigger-name': 1, 'cs-trigger-bar': 0,
@@ -184,7 +187,7 @@
       }
     });
     // 开关
-    ['py-en', 'as-en', 'dnd-en', 'as-badge', 'ml-kaomoji-en', 'ml-emoji-en', 'ml-sticker-en', 'cs-normal', 'cs-trigger-name', 'cs-trigger-bar', 'gc-py-en', 'ai-rps-en', 'ai-game-en', 'ai-cuddle-en', 'ai-cc-en', 'ckq-en', 'call-resume'].forEach(k => {
+    ['py-en', 'as-en', 'dnd-en', 'as-badge', 'ml-kaomoji-en', 'ml-emoji-en', 'ml-sticker-en', 'cs-normal', 'cs-trigger-name', 'cs-trigger-bar', 'gc-py-en', 'ai-rps-en', 'ai-game-en', 'ai-cuddle-en', 'ai-cc-en', 'ckq-en', 'call-resume', 'call-no-hangup'].forEach(k => {
       const el = document.getElementById(k);
       if (el) el.checked = cfg[k] === 1;
     });
@@ -271,7 +274,7 @@
     });
   });
   // 开关交互
-  ['py-en', 'as-en', 'dnd-en', 'as-badge', 'ml-kaomoji-en', 'ml-emoji-en', 'ml-sticker-en', 'cs-normal', 'cs-trigger-name', 'cs-trigger-bar', 'gc-py-en', 'ai-rps-en', 'ai-game-en', 'ai-cuddle-en', 'ai-cc-en', 'ckq-en', 'call-resume'].forEach(k => {
+  ['py-en', 'as-en', 'dnd-en', 'as-badge', 'ml-kaomoji-en', 'ml-emoji-en', 'ml-sticker-en', 'cs-normal', 'cs-trigger-name', 'cs-trigger-bar', 'gc-py-en', 'ai-rps-en', 'ai-game-en', 'ai-cuddle-en', 'ai-cc-en', 'ckq-en', 'call-resume', 'call-no-hangup'].forEach(k => {
     const el = document.getElementById(k);
     if (el) {
       el.addEventListener('change', () => {
@@ -323,7 +326,7 @@
           window.saveReplyCfg(k, v);
         }
       });
-      ['py-en', 'as-en', 'dnd-en', 'as-badge', 'ml-kaomoji-en', 'ml-emoji-en', 'ml-sticker-en', 'cs-normal', 'cs-trigger-name', 'cs-trigger-bar', 'gc-py-en', 'ai-rps-en', 'ai-game-en', 'ai-cuddle-en', 'ai-cc-en', 'ckq-en', 'call-resume'].forEach(k => {
+      ['py-en', 'as-en', 'dnd-en', 'as-badge', 'ml-kaomoji-en', 'ml-emoji-en', 'ml-sticker-en', 'cs-normal', 'cs-trigger-name', 'cs-trigger-bar', 'gc-py-en', 'ai-rps-en', 'ai-game-en', 'ai-cuddle-en', 'ai-cc-en', 'ckq-en', 'call-resume', 'call-no-hangup'].forEach(k => {
         const el = document.getElementById(k);
         if (el) window.saveReplyCfg(k, el.checked ? 1 : 0);
       });
@@ -473,4 +476,60 @@
     } catch (e) {}
   }
   migrateMailMaxOld();
+
+  // ===== v3.27.x #218：互动频率引导提示（纯提醒，不改任何默认值） =====
+  // 背景：系统设置默认全开（设计如此，见开屏公告第八章），但总有用户觉得「概率太高」；
+  // 开关/概率集中在「设置 → 回复设置」，抱怨的用户不知道入口在哪。
+  // 方案：TA 主动消息 / 一次连发多条 / 互动邀请随机触发、且用户正看着聊天页时，弹一条
+  // 可点的提示条引导去回复设置自行调低或关闭。频控=每天最多一次（reply-guide-day 存当日
+  // 日期，同日重复触发静默；用户决策：不设总次数上限，一天一条不烦人），点过提示条或
+  // 手动进过回复设置页（row-general 点击）即永久关闭（reply-guide-done）。
+  // 触发点在 chat.js 三处一行调用 window.replyGuideHint(kind)；聊天页不可见时静默跳过、不占当日名额。
+  function rgToday() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function rgDone() {
+    try { return ls.get('reply-guide-done') === '1'; } catch (e) { return false; }
+  }
+  window.replyGuideHint = function (kind) {
+    try {
+      const pg = document.getElementById('page-chat');
+      if (!pg || pg.hidden) return;
+      if (rgDone()) return;
+      let shownDay = '';
+      try { shownDay = ls.get('reply-guide-day'); } catch (e) {}
+      if (shownDay === rgToday()) return; // 今天已弹过，同日不再打扰
+      try { ls.set('reply-guide-day', rgToday()); } catch (e) {}
+      let bar = document.getElementById('reply-guide-hint');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'reply-guide-hint';
+        bar.innerHTML = '<span class="rgh-txt"></span><span class="rgh-go">去调整</span>';
+        bar.addEventListener('click', () => {
+          try { ls.set('reply-guide-done', '1'); } catch (e) {}
+          clearTimeout(bar._rgT);
+          bar.classList.remove('show');
+          // 跳转：先点底部「设置」tab（tabs.js 接管页面显隐与高亮），再点「回复设置」入口行
+          const tab = document.querySelector('.tab[data-page="page-setting"]');
+          if (tab) tab.click();
+          const genRow = document.getElementById('row-general');
+          if (genRow) genRow.click();
+        });
+        document.body.appendChild(bar);
+      }
+      const txt = bar.querySelector('.rgh-txt');
+      if (txt) {
+        txt.textContent = kind === 'py' ? 'TA 一次连发多条是随机概率触发的，嫌频繁可在「设置 → 回复设置」调低或关闭'
+          : kind === 'inv' ? 'TA 的互动邀请是随机概率触发的，可在「设置 → 回复设置」调低或关闭'
+          : 'TA 的主动消息是随机概率触发的，嫌频繁可在「设置 → 回复设置」调低或关闭';
+      }
+      bar.classList.add('show');
+      clearTimeout(bar._rgT);
+      bar._rgT = setTimeout(() => { try { bar.classList.remove('show'); } catch (e) {} }, 12000);
+    } catch (e) {}
+  };
+  // 手动点开过回复设置页 = 用户已知道入口，不再弹提示
+  const rgGenRow = document.getElementById('row-general');
+  if (rgGenRow) rgGenRow.addEventListener('click', () => { try { ls.set('reply-guide-done', '1'); } catch (e) {} });
 })();

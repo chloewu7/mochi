@@ -376,13 +376,23 @@
     '（把你往怀里带了带）', '（轻轻抵着你的额头）', '（握紧你的手）',
     '（摸了摸你发顶）', '（语气柔下来）', '（把热牛奶推到你手边）'
   ];
+  // v3.26.x #196：近期已用不重复——池只有 6 条且纯均匀随机，连抽同几句被用户当 bug
+  // （小米15Pro 反馈「基本都是这几句」）。各池记最近 3 条，先抽未在近期的，全用过才放宽。
+  var warmRecent = { p: [], s: [] };
+  function warmPick(pool, hist) {
+    var avail = pool.filter(function (x) {
+      return !window.isDefaultCardOff || !window.isDefaultCardOff('period', x);
+    });
+    if (!avail.length) return '';
+    var fresh = avail.filter(function (x) { return warmRecent[hist].indexOf(x) < 0; });
+    var src = fresh.length ? fresh : avail;
+    var pick = src[Math.floor(Math.random() * src.length)];
+    warmRecent[hist].push(pick);
+    if (warmRecent[hist].length > 3) warmRecent[hist].shift();
+    return pick;
+  }
   function warmPrefix() {
-    try {
-      var avail = PERIOD_WARM_PREFIX.filter(function (x) {
-        return !window.isDefaultCardOff || !window.isDefaultCardOff('period', x);
-      });
-      if (avail.length) return avail[Math.floor(Math.random() * avail.length)];
-    } catch (e) {}
+    try { return warmPick(PERIOD_WARM_PREFIX, 'p'); } catch (e) {}
     return '';
   }
   // v3.26.x：温柔动作后缀受字卡库【其他互动功能字卡→经期→温柔动作】单卡开关联动——
@@ -390,19 +400,25 @@
   //   「（轻轻抵着你的额头）」一条，其余五条无字卡库开关；现全部写全），每条均可
   //   逐张开关（dc-off-period:<文案>），关闭后该动作后缀不再随机拼出。开关键即文案本身。
   function warmSuffix() {
-    try {
-      var avail = WARM_SUFFIX.filter(function (x) {
-        return !window.isDefaultCardOff || !window.isDefaultCardOff('period', x);
-      });
-      if (avail.length) return avail[Math.floor(Math.random() * avail.length)];
-    } catch (e) {}
+    try { return warmPick(WARM_SUFFIX, 's'); } catch (e) {}
     return '';
   }
   function warmText(text) {
     if (typeof text !== 'string' || !text) return text;
     try {
       if (!status().inPeriod) return text;
-      if (Math.random() * 100 >= 25) return text;
+      // v3.26.x #157：温柔前缀/温柔动作属系统预设字卡（DEFAULT_CARD_DATA.period）——
+      // 原实现只认逐张开关（dc-off-period:*），无视总开关/聊天使用：用户关掉「使用默认
+      // 字卡」后聊天里仍偶发前缀/动作字卡（小米15Pro 等多机型反馈）。现随总开关与
+      // 聊天使用场景开关一并停用。
+      var _dcfg = (window.defaultCardCfg && window.defaultCardCfg()) || {};
+      if (_dcfg.enabled === false) return text;
+      if (window.defaultCardUse && !window.defaultCardUse('chat')) return text;
+      // v3.32.x #132：触发概率接字卡库【其他互动功能字卡→经期→使用概率】（dcf-period，
+      // 默认 25%=历史值）——原为硬编码 25%，现可在字卡库调（设 0 即经期语态不出现）
+      var _warmP = 25;
+      try { if (window.dcfGet) _warmP = window.dcfGet('period'); } catch (e) {}
+      if (Math.random() * 100 >= _warmP) return text;
       var p = warmPrefix();
       var s = warmSuffix();
       var r = Math.random();

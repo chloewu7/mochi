@@ -342,8 +342,11 @@ body.cs-time-divider .msg-time-divider { display:flex; }
 }
 /* v3.x：邀请TA/问问TA 输入栏转 .ce-box 后常驻合成层——防 syncAndroidKb 平移/
    半框弹起残留文字停在旧合成层=「文字飞出输入栏」（同 #118 .tc-input.ce-box）。
-   仅安卓 ce-box 态生效，iOS/原生输入不受影响 */
-.chat-ask-input.ce-box { will-change: transform; }
+   另：mobile-adapt ceConvert 给每个 ce-box 内联 min-height:24px + border-box，
+   会把 .chat-ask-input 的 padding:11px+border 挤出内容区，占位文字被裁到框外
+   （实测 clientH=23 < scrollH=35，文字溢出）——用 !important 抬高到含内边距的
+   单行自然高度，文字才能完整落在框内；仅此处 ce-box，iOS/原生输入不受影响 */
+.chat-ask-input.ce-box { will-change: transform; min-height:48px !important; }
 .chat-ask-input:focus {
   border-color:var(--ink);
   /* v3.7.x锛氬畨鍗?Chrome 閿洏寮瑰嚭鍔ㄧ敾鎶?fixed 鍗婃涓婄Щ鏃讹紝鑱氱劍鐨?contenteditable
